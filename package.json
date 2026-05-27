@@ -22,6 +22,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/db/seeds/index.ts",
+    "db:truncate": "tsx src/db/truncate.ts",
+    "db:reset": "tsx src/db/reset.ts",
     "db:studio": "drizzle-kit studio",
     "seed:roles": "tsx src/db/seeds/01-roles.ts",
     "seed:permissions": "tsx src/db/seeds/02-permissions.ts",
@@ -35,6 +37,7 @@
     "seed:prescriptions": "tsx src/db/seeds/10-prescriptions.ts"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@neondatabase/serverless": "^1.1.0",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.10.0",
@@ -45,6 +48,7 @@
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
+    "pusher": "^5.3.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {
