@@ -10,6 +10,7 @@ import {
   pgEnum,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+import { z } from "zod/v4";
 import { users } from "../users/users.schema";
 import { appointments } from "../appointments/appointments.schema";
 
@@ -123,3 +124,37 @@ export const doctorBlockedSlotsRelations = relations(doctorBlockedSlots, ({ one 
     references: [doctorProfiles.id],
   }),
 }));
+
+// ---------------------------------------------------------------------------
+// Zod validators
+// ---------------------------------------------------------------------------
+export const updateDoctorSchema = z.object({
+  specialization: z.string().min(1).max(100).optional(),
+  bio: z.string().max(2000).optional(),
+  licenseNumber: z.string().max(50).optional(),
+  yearsOfExperience: z.number().int().min(0).optional(),
+  consultationFee: z.number().positive().optional(),
+  isAcceptingPatients: z.boolean().optional(),
+});
+
+export const setAvailabilitySchema = z.object({
+  availability: z.array(
+    z.object({
+      dayOfWeek: z.number().int().min(0).max(6),
+      startTime: z.string().regex(/^\d{2}:\d{2}$/),
+      endTime: z.string().regex(/^\d{2}:\d{2}$/),
+      isAvailable: z.boolean(),
+    }),
+  ),
+});
+
+export const blockSlotSchema = z.object({
+  blockedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  reason: z.string().max(200).optional(),
+});
+
+export type UpdateDoctorInput = z.infer<typeof updateDoctorSchema>;
+export type SetAvailabilityInput = z.infer<typeof setAvailabilitySchema>;
+export type BlockSlotInput = z.infer<typeof blockSlotSchema>;

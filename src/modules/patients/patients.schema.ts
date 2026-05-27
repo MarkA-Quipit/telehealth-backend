@@ -4,12 +4,12 @@ import {
   varchar,
   text,
   date,
-  integer,
   decimal,
   timestamp,
   pgEnum,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+import { z } from "zod/v4";
 import { users } from "../users/users.schema";
 import { appointments } from "../appointments/appointments.schema";
 
@@ -64,3 +64,19 @@ export const patientProfilesRelations = relations(patientProfiles, ({ one, many 
   user: one(users, { fields: [patientProfiles.userId], references: [users.id] }),
   appointments: many(appointments),
 }));
+
+// ---------------------------------------------------------------------------
+// Zod validators
+// ---------------------------------------------------------------------------
+export const updatePatientSchema = z.object({
+  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),       // YYYY-MM-DD
+  weightKg: z.number().positive().optional(),
+  heightCm: z.number().positive().optional(),
+  bloodType: z.enum(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]).optional(),
+  allergies: z.string().max(1000).optional(),
+  medicalHistory: z.string().max(2000).optional(),                       // maps to pastMedicalConditions
+  emergencyContactName: z.string().max(100).optional(),
+  emergencyContactPhone: z.string().max(20).optional(),
+});
+
+export type UpdatePatientInput = z.infer<typeof updatePatientSchema>;

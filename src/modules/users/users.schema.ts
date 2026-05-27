@@ -1,9 +1,21 @@
-import { pgTable, uuid, varchar, text, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, uuid, varchar, boolean, timestamp } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+import { z } from "zod/v4";
 import { userRoles } from "../auth/auth.schema";
 import { doctorProfiles } from "../doctors/doctors.schema";
 import { patientProfiles } from "../patients/patients.schema";
 import { notifications } from "../";
+
+// ---------------------------------------------------------------------------
+// Zod validators
+// ---------------------------------------------------------------------------
+export const updateUserSchema = z.object({
+  firstName: z.string().min(1).max(100).optional(),
+  lastName: z.string().min(1).max(100).optional(),
+  phone: z.string().max(20).optional(),
+});
+
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 
 // ---------------------------------------------------------------------------
 // users  (identity — credentials only, no role-specific fields here)

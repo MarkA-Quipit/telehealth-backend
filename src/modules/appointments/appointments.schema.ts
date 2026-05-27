@@ -7,6 +7,7 @@ import {
   pgEnum,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+import { z } from "zod/v4";
 import { doctorProfiles } from "../doctors/doctors.schema";
 import { patientProfiles } from "../patients/patients.schema";
 import { users } from "../users/users.schema";
@@ -153,3 +154,25 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
     references: [appointments.id],
   }),
 }));
+
+// ---------------------------------------------------------------------------
+// Zod validators
+// ---------------------------------------------------------------------------
+export const createAppointmentSchema = z.object({
+  doctorId: z.uuid(),
+  scheduledAt: z.iso.datetime(),               // ISO UTC, must be future (checked in service)
+  durationMinutes: z.number().int().min(15).max(120).default(30).optional(),
+  reasonForVisit: z.string().max(500).optional(),
+});
+
+export const updateStatusSchema = z.object({
+  status: z.enum(["confirmed", "completed"]),
+});
+
+export const cancelAppointmentSchema = z.object({
+  cancellationReason: z.string().max(500).optional(),
+});
+
+export type CreateAppointmentInput = z.infer<typeof createAppointmentSchema>;
+export type UpdateStatusInput = z.infer<typeof updateStatusSchema>;
+export type CancelAppointmentInput = z.infer<typeof cancelAppointmentSchema>;
