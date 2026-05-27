@@ -12,6 +12,8 @@ import doctorsRouter from "./modules/doctors/doctors.controller";
 import appointmentsRouter from "./modules/appointments/appointments.controller";
 import consultationsRouter from "./modules/consultations/consultations.controller";
 import prescriptionsRouter from "./modules/prescriptions/prescriptions.controller";
+import notificationsRouter from "./modules/notifications/notifications.controller";
+import aiRouter from "./modules/ai/ai.controller";
 
 const app = express();
 
@@ -48,6 +50,8 @@ app.use("/api/doctors", doctorsRouter);
 app.use("/api/appointments", appointmentsRouter);
 app.use("/api/appointments/:appointmentId/notes", consultationsRouter);
 app.use("/api/appointments/:appointmentId/prescriptions", prescriptionsRouter);
+app.use("/api/notifications", notificationsRouter);
+app.use("/api/ai", aiRouter);
 
 // ---------------------------------------------------------------------------
 // Error handler — must be last

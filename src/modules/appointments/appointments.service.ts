@@ -3,6 +3,7 @@ import { AppError } from "../../shared/types";
 import { appointmentsRepository } from "./appointments.repository";
 import { patientsRepository } from "../patients/patients.repository";
 import { doctorsRepository } from "../doctors/doctors.repository";
+import { notificationsService } from "../notifications/notifications.service";
 import type { CreateAppointmentInput, UpdateStatusInput, CancelAppointmentInput } from "./appointments.schema";
 
 // ---------------------------------------------------------------------------
@@ -13,6 +14,21 @@ const DOCTOR_TRANSITIONS: Record<string, string[]> = {
   confirmed: ["completed"],
 };
 const TERMINAL = ["completed", "cancelled"];
+
+// ---------------------------------------------------------------------------
+// Date formatter — "June 3, 2026 at 10:00 AM"
+// ---------------------------------------------------------------------------
+function formatDate(date: Date): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "UTC",
+  }).format(date);
+}
 
 export const appointmentsService = {
   // ── createAppointment ─────────────────────────────────────────────────────
@@ -61,9 +77,34 @@ export const appointmentsService = {
       );
     });
 
-    // TODO Day 4: notificationsService.createAndPush for patient + doctor
+    // 6. Resolve names for notification messages
+    const full = await appointmentsRepository.findById(appointment.id);
+    if (full) {
+      const patientFullName = `${full.patient.firstName} ${full.patient.lastName}`;
+      const doctorFullName  = `${full.doctor.firstName} ${full.doctor.lastName}`;
+      const formattedDate   = formatDate(scheduledAt);
+      const appointmentId   = appointment.id;
 
-    return appointmentsRepository.findById(appointment.id);
+      // Notify patient
+      notificationsService.createAndPush(
+        full.patient.userId,
+        "appointment_booked",
+        "Appointment Booked",
+        `Your appointment with Dr. ${doctorFullName} on ${formattedDate} is pending confirmation.`,
+        { appointmentId },
+      ).catch((err: unknown) => console.error("[notify] patient booking:", err));
+
+      // Notify doctor
+      notificationsService.createAndPush(
+        full.doctor.userId,
+        "appointment_booked",
+        "New Appointment Request",
+        `${patientFullName} has booked an appointment on ${formattedDate}.`,
+        { appointmentId },
+      ).catch((err: unknown) => console.error("[notify] doctor booking:", err));
+    }
+
+    return full;
   },
 
   // ── getAppointment ────────────────────────────────────────────────────────
@@ -126,10 +167,35 @@ export const appointmentsService = {
     }
 
     const updated = await appointmentsRepository.updateStatus(appointmentId, dto.status);
+    const full = await appointmentsRepository.findById(updated.id);
 
-    // TODO Day 4: notificationsService.createAndPush
+    if (full) {
+      const doctorFullName = `${full.doctor.firstName} ${full.doctor.lastName}`;
+      const formattedDate  = formatDate(full.scheduledAt);
+      const apptId         = full.id;
 
-    return appointmentsRepository.findById(updated.id);
+      if (dto.status === "confirmed") {
+        notificationsService.createAndPush(
+          full.patient.userId,
+          "appointment_confirmed",
+          "Appointment Confirmed",
+          `Dr. ${doctorFullName} confirmed your appointment on ${formattedDate}.`,
+          { appointmentId: apptId },
+        ).catch((err: unknown) => console.error("[notify] confirmed:", err));
+      }
+
+      if (dto.status === "completed") {
+        notificationsService.createAndPush(
+          full.patient.userId,
+          "appointment_completed",
+          "Consultation Complete",
+          `Your consultation with Dr. ${doctorFullName} is complete. View your notes and prescriptions.`,
+          { appointmentId: apptId },
+        ).catch((err: unknown) => console.error("[notify] completed:", err));
+      }
+    }
+
+    return full;
   },
 
   // ── cancelAppointment — either role ───────────────────────────────────────
@@ -163,8 +229,35 @@ export const appointmentsService = {
       dto.cancellationReason,
     );
 
-    // TODO Day 4: notificationsService.createAndPush to the other party
+    const full = await appointmentsRepository.findById(updated.id);
 
-    return appointmentsRepository.findById(updated.id);
+    if (full) {
+      const patientFullName = `${full.patient.firstName} ${full.patient.lastName}`;
+      const doctorFullName  = `${full.doctor.firstName} ${full.doctor.lastName}`;
+      const formattedDate   = formatDate(full.scheduledAt);
+      const apptId          = full.id;
+
+      if (isPatient) {
+        // Cancelled by patient → notify doctor
+        notificationsService.createAndPush(
+          full.doctor.userId,
+          "appointment_cancelled",
+          "Appointment Cancelled",
+          `${patientFullName} cancelled their appointment on ${formattedDate}.`,
+          { appointmentId: apptId },
+        ).catch((err: unknown) => console.error("[notify] cancel→doctor:", err));
+      } else {
+        // Cancelled by doctor → notify patient
+        notificationsService.createAndPush(
+          full.patient.userId,
+          "appointment_cancelled",
+          "Appointment Cancelled",
+          `Dr. ${doctorFullName} cancelled your appointment on ${formattedDate}.`,
+          { appointmentId: apptId },
+        ).catch((err: unknown) => console.error("[notify] cancel→patient:", err));
+      }
+    }
+
+    return full;
   },
 };

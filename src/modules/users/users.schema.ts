@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 import { userRoles } from "../auth/auth.schema";
 import { doctorProfiles } from "../doctors/doctors.schema";
 import { patientProfiles } from "../patients/patients.schema";
-import { notifications } from "../";
+import { notifications } from "../notifications/notifications.schema";
 
 // ---------------------------------------------------------------------------
 // Zod validators

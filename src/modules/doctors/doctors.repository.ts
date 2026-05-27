@@ -36,6 +36,71 @@ function rangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: numbe
 }
 
 // ---------------------------------------------------------------------------
+// Day-of-week conversion helpers
+// ---------------------------------------------------------------------------
+type DayName = "sunday" | "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday";
+
+// Maps integer (0=Sun … 6=Sat) ↔ DB enum string
+const INT_TO_DAY: DayName[] = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+function intToDay(n: number): DayName {
+  return INT_TO_DAY[n] as DayName;
+}
+
+function dayToInt(day: string): number {
+  return INT_TO_DAY.indexOf(day as DayName);
+}
+
+// ---------------------------------------------------------------------------
+// Availability / blocked-slot return types
+// ---------------------------------------------------------------------------
+export interface DoctorAvailabilityReturn {
+  id: string;
+  doctorId: string;
+  dayOfWeek: number; // 0=Sun … 6=Sat
+  startTime: string; // "HH:MM"
+  endTime: string;   // "HH:MM"
+  isAvailable: boolean;
+}
+
+export interface BlockedSlotReturn {
+  id: string;
+  doctorId: string;
+  blockedDate: string; // "YYYY-MM-DD"
+  startTime: string;   // "HH:MM"
+  endTime: string;     // "HH:MM"
+  reason: string | null;
+  createdAt: Date;
+}
+
+function mapAvailRow(row: typeof doctorAvailability.$inferSelect): DoctorAvailabilityReturn {
+  return {
+    id: row.id,
+    doctorId: row.doctorId,
+    dayOfWeek: dayToInt(row.dayOfWeek),
+    startTime: row.startTime.slice(0, 5), // "HH:MM:SS" → "HH:MM"
+    endTime: row.endTime.slice(0, 5),
+    isAvailable: row.isActive,
+  };
+}
+
+function mapBlockedRow(row: typeof doctorBlockedSlots.$inferSelect): BlockedSlotReturn {
+  const d = new Date(row.blockedDate);
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return {
+    id: row.id,
+    doctorId: row.doctorId,
+    blockedDate: `${yyyy}-${mm}-${dd}`,
+    startTime: row.startTime.slice(0, 5),
+    endTime: row.endTime.slice(0, 5),
+    reason: row.reason ?? null,
+    createdAt: row.createdAt,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 export interface DoctorWithUser {
@@ -193,6 +258,113 @@ export const doctorsRepository = {
       .from(doctorProfiles)
       .orderBy(doctorProfiles.specialization);
     return rows.map((r) => r.specialization);
+  },
+
+  // ── getAvailability ───────────────────────────────────────────────────────
+  async getAvailability(doctorId: string): Promise<DoctorAvailabilityReturn[]> {
+    const rows = await db
+      .select()
+      .from(doctorAvailability)
+      .where(eq(doctorAvailability.doctorId, doctorId));
+    return rows.map(mapAvailRow);
+  },
+
+  // ── setAvailability — replace-all in a transaction ─────────────────────
+  async setAvailability(
+    doctorId: string,
+    slots: Array<{ dayOfWeek: number; startTime: string; endTime: string; isAvailable: boolean }>,
+  ): Promise<DoctorAvailabilityReturn[]> {
+    return db.transaction(async (tx) => {
+      // 1. Delete all existing rows for this doctor
+      await tx
+        .delete(doctorAvailability)
+        .where(eq(doctorAvailability.doctorId, doctorId));
+
+      if (slots.length === 0) return [];
+
+      // 2. Insert new rows
+      const inserted = await tx
+        .insert(doctorAvailability)
+        .values(
+          slots.map((slot) => ({
+            doctorId,
+            dayOfWeek: intToDay(slot.dayOfWeek),
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            isActive: slot.isAvailable,
+          })),
+        )
+        .returning();
+
+      return inserted.map(mapAvailRow);
+    });
+  },
+
+  // ── getBlockedSlots ───────────────────────────────────────────────────────
+  async getBlockedSlots(doctorId: string, date?: string): Promise<BlockedSlotReturn[]> {
+    if (date) {
+      // Specific date: match blocked_date within that calendar day (UTC)
+      const dayStart = new Date(`${date}T00:00:00.000Z`);
+      const dayEnd   = new Date(`${date}T23:59:59.999Z`);
+
+      const rows = await db
+        .select()
+        .from(doctorBlockedSlots)
+        .where(
+          and(
+            eq(doctorBlockedSlots.doctorId, doctorId),
+            gte(doctorBlockedSlots.blockedDate, dayStart),
+            lte(doctorBlockedSlots.blockedDate, dayEnd),
+          ),
+        )
+        .orderBy(doctorBlockedSlots.blockedDate);
+      return rows.map(mapBlockedRow);
+    }
+
+    // No date: upcoming only (today onward)
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+
+    const rows = await db
+      .select()
+      .from(doctorBlockedSlots)
+      .where(
+        and(
+          eq(doctorBlockedSlots.doctorId, doctorId),
+          gte(doctorBlockedSlots.blockedDate, todayStart),
+        ),
+      )
+      .orderBy(doctorBlockedSlots.blockedDate);
+    return rows.map(mapBlockedRow);
+  },
+
+  // ── addBlockedSlot ────────────────────────────────────────────────────────
+  async addBlockedSlot(
+    doctorId: string,
+    data: { blockedDate: string; startTime: string; endTime: string; reason?: string },
+  ): Promise<BlockedSlotReturn> {
+    // Store the date as midnight UTC
+    const blockedDate = new Date(`${data.blockedDate}T00:00:00.000Z`);
+
+    const inserted = await db
+      .insert(doctorBlockedSlots)
+      .values({
+        doctorId,
+        blockedDate,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        reason: data.reason ?? null,
+      })
+      .returning();
+
+    return mapBlockedRow(inserted[0]);
+  },
+
+  // ── deleteBlockedSlot ─────────────────────────────────────────────────────
+  async deleteBlockedSlot(slotId: string): Promise<void> {
+    await db
+      .delete(doctorBlockedSlots)
+      .where(eq(doctorBlockedSlots.id, slotId));
   },
 
   // ── getAvailableSlots ─────────────────────────────────────────────────────

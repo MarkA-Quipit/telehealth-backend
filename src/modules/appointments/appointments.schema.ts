@@ -6,6 +6,7 @@ import {
   timestamp,
   pgEnum,
 } from "drizzle-orm/pg-core";
+// Note: notifications table moved to notifications.schema.ts
 import { relations } from "drizzle-orm";
 import { z } from "zod/v4";
 import { doctorProfiles } from "../doctors/doctors.schema";
@@ -21,17 +22,6 @@ export const appointmentStatusEnum = pgEnum("appointment_status", [
   "cancelled",    // cancelled by patient or doctor
   "completed",    // session ended
   "no_show",      // patient did not join
-]);
-
-export const notificationTypeEnum = pgEnum("notification_type", [
-  "appointment_booked",
-  "appointment_confirmed",
-  "appointment_cancelled",
-  "appointment_rescheduled",
-  "appointment_reminder",   // upcoming appointment nudge
-  "appointment_completed",
-  "prescription_added",
-  "general",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -70,30 +60,9 @@ export const appointments = pgTable("appointments", {
 });
 
 // ---------------------------------------------------------------------------
-// notifications  (persistent inbox — Pusher handles real-time fanout)
-// ---------------------------------------------------------------------------
-export const notifications = pgTable("notifications", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-
-  type: notificationTypeEnum("type").notNull(),
-  title: varchar("title", { length: 255 }).notNull(),
-  body: text("body").notNull(),
-
-  // Optional deep-link context
-  appointmentId: uuid("appointment_id").references(() => appointments.id, { onDelete: "set null" }),
-
-  isRead: timestamp("is_read", { withTimezone: true }),   // null = unread; timestamp = read-at
-
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------
-export const appointmentsRelations = relations(appointments, ({ one, many }) => ({
+export const appointmentsRelations = relations(appointments, ({ one }) => ({
   patient: one(patientProfiles, {
     fields: [appointments.patientId],
     references: [patientProfiles.id],
@@ -105,15 +74,6 @@ export const appointmentsRelations = relations(appointments, ({ one, many }) => 
   cancelledByUser: one(users, {
     fields: [appointments.cancelledBy],
     references: [users.id],
-  }),
-  notifications: many(notifications),
-}));
-
-export const notificationsRelations = relations(notifications, ({ one }) => ({
-  user: one(users, { fields: [notifications.userId], references: [users.id] }),
-  appointment: one(appointments, {
-    fields: [notifications.appointmentId],
-    references: [appointments.id],
   }),
 }));
 
