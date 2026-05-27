@@ -1,34 +1,22 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../config/db';
 
-// Tables in reverse dependency order — children first, parents last — so FK
-// constraints are never violated.  IF EXISTS makes the script re-entrant and
-// CASCADE drops any dependent objects not already covered by the order.
-const TABLES = [
-  'notifications',
-  'prescriptions',
-  'consultation_notes',
-  'appointments',
-  'doctor_blocked_slots',
-  'doctor_availability',
-  'doctor_profiles',
-  'patient_profiles',
-  'user_roles',
-  'role_permissions',
-  'permissions',
-  'roles',
-  'users',
-] as const;
-
 async function resetAll(): Promise<void> {
-  console.log('⚡ Dropping all tables (full schema wipe)…\n');
+  console.log('⚡ Dropping everything (full schema wipe)…\n');
 
-  for (const table of TABLES) {
-    await db.execute(sql.raw(`DROP TABLE IF EXISTS ${table} CASCADE`));
-    console.log(`  ✓ Dropped ${table}`);
-  }
+  // Drop the entire public schema and immediately recreate it — this removes
+  // all tables, types, sequences, and other objects in one shot without
+  // needing to know what's in there.
+  await db.execute(sql.raw(`DROP SCHEMA IF EXISTS public CASCADE`));
+  await db.execute(sql.raw(`CREATE SCHEMA public`));
+  console.log('  ✓ Wiped and recreated public schema');
 
-  console.log(`\n✅ Done — ${TABLES.length} tables dropped. Run db:migrate to rebuild the schema.`);
+  // Drop Drizzle's migration-tracking schema so db:migrate re-applies
+  // all migrations from scratch on the next run.
+  await db.execute(sql.raw(`DROP SCHEMA IF EXISTS drizzle CASCADE`));
+  console.log('  ✓ Dropped drizzle migration-tracking schema');
+
+  console.log('\n✅ Done. Run db:migrate to rebuild the schema.');
 }
 
 // ---------------------------------------------------------------------------

@@ -1,34 +1,31 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../config/db';
 
-// Tables in reverse dependency order — children first, parents last — so FK
-// constraints are never violated.  RESTART IDENTITY resets auto-increment
-// sequences; CASCADE handles any FK references not already covered by the order.
-const TABLES = [
-  'notifications',
-  'prescriptions',
-  'consultation_notes',
-  'appointments',
-  'doctor_blocked_slots',
-  'doctor_availability',
-  'doctor_profiles',
-  'patient_profiles',
-  'user_roles',
-  'role_permissions',
-  'permissions',
-  'roles',
-  'users',
-] as const;
-
 async function truncateAll(): Promise<void> {
   console.log('⚡ Truncating all tables…\n');
 
-  for (const table of TABLES) {
-    await db.execute(sql.raw(`TRUNCATE ${table} RESTART IDENTITY CASCADE`));
+  // Discover every table currently in the public schema at runtime.
+  const result = await db.execute(
+    sql`SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename`,
+  );
+
+  const tables = result.rows.map((r) => (r as { tablename: string }).tablename);
+
+  if (tables.length === 0) {
+    console.log('  ℹ No tables found — nothing to truncate.');
+    return;
+  }
+
+  // Truncate all tables in a single statement with CASCADE so FK order
+  // doesn't matter, and RESTART IDENTITY resets all sequences.
+  const tableList = tables.map((t) => `"${t}"`).join(', ');
+  await db.execute(sql.raw(`TRUNCATE ${tableList} RESTART IDENTITY CASCADE`));
+
+  for (const table of tables) {
     console.log(`  ✓ Truncated ${table}`);
   }
 
-  console.log(`\n✅ Done — ${TABLES.length} tables truncated, sequences reset.`);
+  console.log(`\n✅ Done — ${tables.length} tables truncated, sequences reset.`);
 }
 
 // ---------------------------------------------------------------------------

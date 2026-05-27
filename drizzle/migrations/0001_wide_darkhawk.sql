@@ -16,7 +16,7 @@ ALTER TABLE "notifications" DROP CONSTRAINT "notifications_appointment_id_appoin
 ALTER TABLE "consultation_notes" ALTER COLUMN "follow_up_date" SET DATA TYPE date;--> statement-breakpoint
 ALTER TABLE "notifications" ALTER COLUMN "type" SET DATA TYPE varchar(50);--> statement-breakpoint
 ALTER TABLE "notifications" ALTER COLUMN "title" SET DATA TYPE varchar(200);--> statement-breakpoint
-ALTER TABLE "notifications" ALTER COLUMN "is_read" SET DATA TYPE boolean;--> statement-breakpoint
+ALTER TABLE "notifications" ALTER COLUMN "is_read" SET DATA TYPE boolean USING (is_read IS NOT NULL);--> statement-breakpoint
 ALTER TABLE "notifications" ALTER COLUMN "is_read" SET NOT NULL;--> statement-breakpoint
 ALTER TABLE "consultation_notes" ADD COLUMN "doctor_id" uuid NOT NULL;--> statement-breakpoint
 ALTER TABLE "consultation_notes" ADD COLUMN "patient_id" uuid NOT NULL;--> statement-breakpoint
