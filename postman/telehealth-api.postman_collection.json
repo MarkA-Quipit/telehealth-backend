@@ -1,0 +1,1355 @@
+{
+  "info": {
+    "_postman_id": "4f8a2c1b-9d3e-4a7f-b5c2-8e1d6f0a3b9c",
+    "name": "Telehealth API",
+    "description": "# Telehealth API — Modular Postman Collection\n\n## How Credentials Work\n\n1. **Login as Patient** or **Login as Doctor** — the test script auto-captures the JWT and sets `currentToken` + the role-specific token variable.\n2. All requests inherit the collection-level `Bearer {{currentToken}}` auth — no manual header copying needed.\n3. Use **🔄 Activate Patient Token** or **🔄 Activate Doctor Token** (in the Auth folder) to switch the active role mid-session without re-logging in.\n\n## Collection Variables\n\n| Variable | Description |\n|---|---|\n| `baseUrl` | API base URL (default: `http://localhost:3000`) |\n| `currentToken` | Active JWT — auto-set by login requests |\n| `patientToken` | JWT captured from patient login |\n| `doctorToken` | JWT captured from doctor login |\n| `userId` | Auto-set after login / register |\n| `patientId` | Auto-set after patient login |\n| `doctorId` | Auto-set after doctor login |\n| `appointmentId` | Set after creating an appointment |\n| `notificationId` | Set from notification list |\n| `rxId` | Set after adding a prescription |\n| `blockedSlotId` | Set after blocking a doctor slot |\n\n## Seeded Demo Credentials\n\n| Role | Email | Password |\n|---|---|---|\n| Doctor | `doctor1@demo.com` | `password123` |\n| Doctor | `doctor2@demo.com` | `password123` |\n| Patient | `patient1@demo.com` | `password123` |",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{currentToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string",
+      "description": "API base URL — change to production URL when deploying"
+    },
+    {
+      "key": "currentToken",
+      "value": "",
+      "type": "string",
+      "description": "Active JWT token used for all authenticated requests. Auto-set by Login requests."
+    },
+    {
+      "key": "patientToken",
+      "value": "",
+      "type": "string",
+      "description": "JWT captured from the most recent Patient Login"
+    },
+    {
+      "key": "doctorToken",
+      "value": "",
+      "type": "string",
+      "description": "JWT captured from the most recent Doctor Login"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string",
+      "description": "Current user's ID — auto-set after login"
+    },
+    {
+      "key": "patientId",
+      "value": "",
+      "type": "string",
+      "description": "Patient profile ID — auto-set after patient login"
+    },
+    {
+      "key": "doctorId",
+      "value": "",
+      "type": "string",
+      "description": "Doctor profile ID — auto-set after doctor login"
+    },
+    {
+      "key": "appointmentId",
+      "value": "",
+      "type": "string",
+      "description": "Auto-set after creating an appointment"
+    },
+    {
+      "key": "notificationId",
+      "value": "",
+      "type": "string",
+      "description": "Set from the first notification returned by GET /notifications"
+    },
+    {
+      "key": "rxId",
+      "value": "",
+      "type": "string",
+      "description": "Prescription ID — auto-set after adding a prescription"
+    },
+    {
+      "key": "blockedSlotId",
+      "value": "",
+      "type": "string",
+      "description": "Blocked slot ID — auto-set after blocking a doctor slot"
+    }
+  ],
+  "item": [
+    {
+      "name": "🏥 Health",
+      "description": "Liveness and readiness checks — no auth required.",
+      "item": [
+        {
+          "name": "Server Health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Returns `{ status: 'ok', timestamp }`. No auth required."
+          },
+          "response": []
+        },
+        {
+          "name": "Database Health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/health/db",
+              "host": ["{{baseUrl}}"],
+              "path": ["health", "db"]
+            },
+            "description": "Pings the Neon PostgreSQL database. Returns `{ status: 'db connected' }` or `500` on error."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🔐 Auth",
+      "description": "Authentication endpoints plus role-switching helpers.\n\n**Flow:**\n1. Run `Login as Patient` or `Login as Doctor` — token auto-captures.\n2. Use `🔄 Activate Patient Token` / `🔄 Activate Doctor Token` to switch mid-session.",
+      "item": [
+        {
+          "name": "Register — Patient",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('success flag', () => pm.expect(json.success).to.be.true);",
+                  "",
+                  "if (json.success && json.data?.token) {",
+                  "  pm.collectionVariables.set('patientToken', json.data.token);",
+                  "  pm.collectionVariables.set('currentToken', json.data.token);",
+                  "  pm.collectionVariables.set('userId', json.data.user?.id ?? '');",
+                  "  pm.collectionVariables.set('patientId', json.data.profile?.id ?? '');",
+                  "  console.log('✅ Patient registered and token saved');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"newpatient@example.com\",\n  \"password\": \"password123\",\n  \"firstName\": \"Juan\",\n  \"lastName\": \"Dela Cruz\",\n  \"role\": \"patient\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "register"]
+            },
+            "description": "Register a new patient account. Role must be `patient` or `doctor`.\n\n**Auto-captures:** `patientToken`, `currentToken`, `userId`, `patientId`"
+          },
+          "response": []
+        },
+        {
+          "name": "Register — Doctor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('success flag', () => pm.expect(json.success).to.be.true);",
+                  "",
+                  "if (json.success && json.data?.token) {",
+                  "  pm.collectionVariables.set('doctorToken', json.data.token);",
+                  "  pm.collectionVariables.set('currentToken', json.data.token);",
+                  "  pm.collectionVariables.set('userId', json.data.user?.id ?? '');",
+                  "  pm.collectionVariables.set('doctorId', json.data.profile?.id ?? '');",
+                  "  console.log('✅ Doctor registered and token saved');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"newdoctor@example.com\",\n  \"password\": \"password123\",\n  \"firstName\": \"Ricardo\",\n  \"lastName\": \"Dalisay\",\n  \"role\": \"doctor\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "register"]
+            },
+            "description": "Register a new doctor account.\n\n**Auto-captures:** `doctorToken`, `currentToken`, `userId`, `doctorId`"
+          },
+          "response": []
+        },
+        {
+          "name": "Login — Patient",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success flag', () => pm.expect(json.success).to.be.true);",
+                  "pm.test('token present', () => pm.expect(json.data?.token).to.be.a('string').and.not.empty);",
+                  "",
+                  "if (json.success && json.data?.token) {",
+                  "  pm.collectionVariables.set('patientToken', json.data.token);",
+                  "  pm.collectionVariables.set('currentToken', json.data.token);",
+                  "  pm.collectionVariables.set('userId', json.data.user?.id ?? '');",
+                  "  console.log('✅ Patient token saved → currentToken updated');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"patient1@demo.com\",\n  \"password\": \"password123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Login with seeded patient credentials.\n\n**Seeded:** `patient1@demo.com` / `password123`\n\n**Auto-captures:** `patientToken`, `currentToken`, `userId`"
+          },
+          "response": []
+        },
+        {
+          "name": "Login — Doctor 1 (Cardiologist)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success flag', () => pm.expect(json.success).to.be.true);",
+                  "pm.test('token present', () => pm.expect(json.data?.token).to.be.a('string').and.not.empty);",
+                  "",
+                  "if (json.success && json.data?.token) {",
+                  "  pm.collectionVariables.set('doctorToken', json.data.token);",
+                  "  pm.collectionVariables.set('currentToken', json.data.token);",
+                  "  pm.collectionVariables.set('userId', json.data.user?.id ?? '');",
+                  "  console.log('✅ Doctor 1 token saved → currentToken updated');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"doctor1@demo.com\",\n  \"password\": \"password123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Login as Dr. Maria Santos (Cardiologist).\n\n**Seeded:** `doctor1@demo.com` / `password123`\n\n**Auto-captures:** `doctorToken`, `currentToken`, `userId`"
+          },
+          "response": []
+        },
+        {
+          "name": "Login — Doctor 2 (General Practice)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "if (json.success && json.data?.token) {",
+                  "  pm.collectionVariables.set('doctorToken', json.data.token);",
+                  "  pm.collectionVariables.set('currentToken', json.data.token);",
+                  "  pm.collectionVariables.set('userId', json.data.user?.id ?? '');",
+                  "  console.log('✅ Doctor 2 token saved → currentToken updated');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"doctor2@demo.com\",\n  \"password\": \"password123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Login as Dr. Jose Reyes (General Practice).\n\n**Seeded:** `doctor2@demo.com` / `password123`"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current User (me)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('user data present', () => pm.expect(json.data).to.be.an('object'));",
+                  "",
+                  "if (json.data?.id) {",
+                  "  pm.collectionVariables.set('userId', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "me"]
+            },
+            "description": "Returns the authenticated user's profile from the JWT. Requires `currentToken` to be set."
+          },
+          "response": []
+        },
+        {
+          "name": "🔄 Activate Patient Token",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const t = pm.collectionVariables.get('patientToken');",
+                  "if (!t) {",
+                  "  console.warn('⚠ patientToken is empty — run \"Login — Patient\" first');",
+                  "} else {",
+                  "  pm.collectionVariables.set('currentToken', t);",
+                  "  console.log('🔄 Switched to Patient token');",
+                  "}",
+                  "// Abort the actual request (it's just a helper)",
+                  "throw new Error('Role switched to Patient — this request intentionally aborted');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "**Helper — not a real API call.**\n\nSets `currentToken` to the saved `patientToken`. Run this to switch the active role to Patient mid-session.\n\nThe pre-request script switches the token and aborts the request so you don't hit the server."
+          },
+          "response": []
+        },
+        {
+          "name": "🔄 Activate Doctor Token",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const t = pm.collectionVariables.get('doctorToken');",
+                  "if (!t) {",
+                  "  console.warn('⚠ doctorToken is empty — run \"Login — Doctor\" first');",
+                  "} else {",
+                  "  pm.collectionVariables.set('currentToken', t);",
+                  "  console.log('🔄 Switched to Doctor token');",
+                  "}",
+                  "throw new Error('Role switched to Doctor — this request intentionally aborted');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "**Helper — not a real API call.**\n\nSets `currentToken` to the saved `doctorToken`. Run this to switch the active role to Doctor mid-session."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "👤 Users",
+      "description": "User profile management and avatar upload.\n\n**Auth:** Any authenticated user. Users can only update/upload for their own ID.",
+      "item": [
+        {
+          "name": "Get User by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('user data present', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data).to.be.an('object');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "{{userId}}"]
+            },
+            "description": "Fetch a user by their UUID. Uses `{{userId}}` — set this after login."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('update acknowledged', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Ana\",\n  \"lastName\": \"Cruz Updated\",\n  \"phone\": \"+639171234567\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "{{userId}}"]
+            },
+            "description": "Update user profile fields (firstName, lastName, phone). Only the user themselves can update their own profile."
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Avatar",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "JPG, PNG, or WebP — max 5 MB"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{userId}}/avatar",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "{{userId}}", "avatar"]
+            },
+            "description": "Upload a profile picture. Uploaded to Cloudinary. Accepts `image/jpeg`, `image/png`, `image/webp` — max 5 MB.\n\nUse `form-data` body with key `file`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🧑‍⚕️ Patients",
+      "description": "Patient profile management (medical history, emergency contact, etc.).\n\n**Auth:** Requires `patientToken` (`currentToken` must be set to patient JWT).",
+      "item": [
+        {
+          "name": "Get Patient Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "if (json.data?.id) {",
+                  "  pm.collectionVariables.set('patientId', json.data.id);",
+                  "  console.log('📌 patientId saved:', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/patients/{{patientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "patients", "{{patientId}}"]
+            },
+            "description": "Retrieve a patient's full profile including medical history.\n\n**Tip:** After running, `patientId` is auto-captured."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Patient Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success', () => pm.expect(pm.response.json().success).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dateOfBirth\": \"1990-05-15\",\n  \"gender\": \"female\",\n  \"bloodType\": \"O+\",\n  \"allergies\": \"Penicillin\",\n  \"currentMedications\": \"None\",\n  \"medicalHistory\": \"Mild hypertension diagnosed 2022\",\n  \"emergencyContactName\": \"Pedro Cruz\",\n  \"emergencyContactPhone\": \"+639181234567\",\n  \"emergencyContactRelationship\": \"Spouse\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/patients/{{patientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "patients", "{{patientId}}"]
+            },
+            "description": "Update patient medical information. Partial updates supported — only send fields you want to change."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "👨‍⚕️ Doctors",
+      "description": "Doctor discovery, profile management, availability, and slot blocking.\n\n**Role notes:**\n- `GET` endpoints: any authenticated user\n- `PUT`, `POST`, `DELETE` on a doctor's own resources: requires doctor role (`doctorToken`)",
+      "item": [
+        {
+          "name": "List Doctors",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('pagination shape', () => {",
+                  "  pm.expect(json.data).to.have.property('items');",
+                  "  pm.expect(json.data).to.have.property('total');",
+                  "});",
+                  "",
+                  "// Auto-save first doctor ID for downstream requests",
+                  "const firstDoctor = json.data?.items?.[0];",
+                  "if (firstDoctor?.id) {",
+                  "  pm.collectionVariables.set('doctorId', firstDoctor.id);",
+                  "  console.log('📌 doctorId saved:', firstDoctor.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/doctors?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "doctors"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "specialization", "value": "", "disabled": true, "description": "e.g. Cardiology" },
+                { "key": "search", "value": "", "disabled": true, "description": "Search name or bio" }
+              ]
+            },
+            "description": "Paginated list of all doctors. Optional query filters:\n- `specialization` — e.g. `Cardiology`\n- `search` — searches name and bio\n- `page`, `limit` — pagination (default: 1, 20)\n\n**Auto-captures:** `doctorId` from first result"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Doctor by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('doctor data', () => pm.expect(pm.response.json().data).to.be.an('object'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/doctors/{{doctorId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "doctors", "{{doctorId}}"]
+            },
+            "description": "Get a single doctor's full profile including availability summary."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Doctor Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bio\": \"Board-certified cardiologist with 10 years of experience. Specializes in preventive cardiology.\",\n  \"consultationFee\": 550,\n  \"isAcceptingPatients\": true,\n  \"yearsOfExperience\": 11\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/doctors/{{doctorId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "doctors", "{{doctorId}}"]
+            },
+            "description": "Update a doctor's profile. **Must be logged in as the doctor** (`doctorToken` active)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Doctor Availability",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('array of slots', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/doctors/{{doctorId}}/availability",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "doctors", "{{doctorId}}", "availability"]
+            },
+            "description": "Returns the doctor's weekly availability schedule (day of week + time windows)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Doctor Availability",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  { \"dayOfWeek\": \"monday\",    \"startTime\": \"09:00\", \"endTime\": \"17:00\", \"isAvailable\": true },\n  { \"dayOfWeek\": \"tuesday\",   \"startTime\": \"09:00\", \"endTime\": \"17:00\", \"isAvailable\": true },\n  { \"dayOfWeek\": \"wednesday\", \"startTime\": \"09:00\", \"endTime\": \"13:00\", \"isAvailable\": true },\n  { \"dayOfWeek\": \"thursday\",  \"startTime\": \"09:00\", \"endTime\": \"17:00\", \"isAvailable\": true },\n  { \"dayOfWeek\": \"friday\",    \"startTime\": \"09:00\", \"endTime\": \"17:00\", \"isAvailable\": true },\n  { \"dayOfWeek\": \"saturday\",  \"startTime\": \"09:00\", \"endTime\": \"12:00\", \"isAvailable\": false }\n]",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/doctors/{{doctorId}}/availability",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "doctors", "{{doctorId}}", "availability"]
+            },
+            "description": "Replace the doctor's weekly schedule. **Doctor role required.**\n\n`isAvailable: false` marks the day as off even if a time window is provided."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Available Booking Slots",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('slots array', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/doctors/{{doctorId}}/slots?date=2026-06-02",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "doctors", "{{doctorId}}", "slots"],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2026-06-02",
+                  "description": "YYYY-MM-DD — must be a future date"
+                }
+              ]
+            },
+            "description": "Returns available 30-minute booking windows for a specific date. Excludes already-booked slots and blocked slots.\n\n**Required query param:** `date` in `YYYY-MM-DD` format."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Blocked Slots",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const slots = pm.response.json().data;",
+                  "if (Array.isArray(slots) && slots.length > 0) {",
+                  "  pm.collectionVariables.set('blockedSlotId', slots[0].id);",
+                  "  console.log('📌 blockedSlotId saved:', slots[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/doctors/{{doctorId}}/blocked-slots",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "doctors", "{{doctorId}}", "blocked-slots"]
+            },
+            "description": "List all manually blocked time slots for this doctor.\n\n**Auto-captures:** `blockedSlotId` from first result."
+          },
+          "response": []
+        },
+        {
+          "name": "Block a Time Slot",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "if (json.data?.id) {",
+                  "  pm.collectionVariables.set('blockedSlotId', json.data.id);",
+                  "  console.log('📌 blockedSlotId saved:', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"blockedAt\": \"2026-06-03T10:00:00.000Z\",\n  \"reason\": \"Personal appointment\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/doctors/{{doctorId}}/blocked-slots",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "doctors", "{{doctorId}}", "blocked-slots"]
+            },
+            "description": "Block a specific datetime slot. **Doctor role required.**\n\n**Auto-captures:** `blockedSlotId`"
+          },
+          "response": []
+        },
+        {
+          "name": "Unblock a Time Slot",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/api/doctors/{{doctorId}}/blocked-slots/{{blockedSlotId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "doctors", "{{doctorId}}", "blocked-slots", "{{blockedSlotId}}"]
+            },
+            "description": "Remove a previously blocked slot. **Doctor role required.**\n\nUses `{{blockedSlotId}}` — auto-set by Block or Get Blocked Slots."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "📅 Appointments",
+      "description": "Appointment lifecycle: book, list, view, reschedule, cancel, and update status.\n\n**Role notes:**\n- Create: patient only\n- List / Get: any authenticated user (results filtered by role)\n- Patch status: doctor only\n- Delete/cancel: either role",
+      "item": [
+        {
+          "name": "Create Appointment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "if (json.data?.id) {",
+                  "  pm.collectionVariables.set('appointmentId', json.data.id);",
+                  "  console.log('📌 appointmentId saved:', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"doctorId\": \"{{doctorId}}\",\n  \"scheduledAt\": \"2026-06-02T09:00:00.000Z\",\n  \"durationMinutes\": 30,\n  \"reasonForVisit\": \"Routine check-up and blood pressure monitoring\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/appointments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "appointments"]
+            },
+            "description": "Book a new appointment. **Patient role required.**\n\n`scheduledAt` must be a future ISO timestamp. `durationMinutes` defaults to 30 if omitted.\n\n**Auto-captures:** `appointmentId`"
+          },
+          "response": []
+        },
+        {
+          "name": "List Appointments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('pagination shape', () => {",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d).to.have.property('items');",
+                  "  pm.expect(d).to.have.property('total');",
+                  "});",
+                  "",
+                  "// Save first appointment ID if not already set",
+                  "const items = pm.response.json().data?.items;",
+                  "if (items?.length > 0 && !pm.collectionVariables.get('appointmentId')) {",
+                  "  pm.collectionVariables.set('appointmentId', items[0].id);",
+                  "  console.log('📌 appointmentId saved:', items[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/appointments?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "appointments"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "", "disabled": true, "description": "Filter: pending | confirmed | completed | cancelled" }
+              ]
+            },
+            "description": "List appointments for the current user. Results are automatically filtered by role:\n- **Patient** → their own appointments\n- **Doctor** → appointments assigned to them\n\nOptional `status` filter: `pending`, `confirmed`, `completed`, `cancelled`"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Appointment by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('appointment data', () => pm.expect(pm.response.json().data).to.be.an('object'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/appointments/{{appointmentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "appointments", "{{appointmentId}}"]
+            },
+            "description": "Get a single appointment's full detail. Both the patient and the doctor can access their shared appointment."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Appointment Status (Doctor)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"confirmed\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/appointments/{{appointmentId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "appointments", "{{appointmentId}}", "status"]
+            },
+            "description": "Update appointment status. **Doctor role required.**\n\nValid transitions:\n- `pending` → `confirmed`\n- `confirmed` → `completed`\n\nStatus values: `pending`, `confirmed`, `completed`, `cancelled`"
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Appointment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Patient requested cancellation due to scheduling conflict\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/appointments/{{appointmentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "appointments", "{{appointmentId}}"]
+            },
+            "description": "Cancel an appointment. Either the patient or the doctor can cancel. An optional `reason` can be provided in the body."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "📝 Consultation Notes",
+      "description": "Consultation notes are scoped to an appointment.\n\n**Base path:** `/api/appointments/:appointmentId/notes`\n\n**Auth:** Doctor can create/update; both roles can read.",
+      "item": [
+        {
+          "name": "Get Notes for Appointment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/appointments/{{appointmentId}}/notes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "appointments", "{{appointmentId}}", "notes"]
+            },
+            "description": "Retrieve the consultation note for a specific appointment. Returns `404` if no notes exist yet."
+          },
+          "response": []
+        },
+        {
+          "name": "Create / Update Notes (Doctor)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chiefComplaint\": \"Patient presents with chest pain and shortness of breath on exertion.\",\n  \"diagnosis\": \"Stable angina pectoris\",\n  \"treatmentPlan\": \"Lifestyle modification, low-dose aspirin, and follow-up stress test in 2 weeks.\",\n  \"followUpDate\": \"2026-06-16T09:00:00.000Z\",\n  \"additionalNotes\": \"Advised patient to monitor blood pressure daily and report any acute episodes.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/appointments/{{appointmentId}}/notes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "appointments", "{{appointmentId}}", "notes"]
+            },
+            "description": "Create or update (upsert) consultation notes. **Doctor role required.**\n\nThis endpoint is idempotent — calling it again updates the existing note."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "💊 Prescriptions",
+      "description": "Prescriptions are scoped to an appointment.\n\n**Base path:** `/api/appointments/:appointmentId/prescriptions`\n\n**Auth:** Doctor can add/remove; both roles can read.",
+      "item": [
+        {
+          "name": "Get Prescriptions for Appointment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('array', () => pm.expect(pm.response.json().data).to.be.an('array'));",
+                  "",
+                  "const rxList = pm.response.json().data;",
+                  "if (rxList?.length > 0) {",
+                  "  pm.collectionVariables.set('rxId', rxList[0].id);",
+                  "  console.log('📌 rxId saved:', rxList[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/appointments/{{appointmentId}}/prescriptions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "appointments", "{{appointmentId}}", "prescriptions"]
+            },
+            "description": "List all prescriptions for a specific appointment.\n\n**Auto-captures:** `rxId` from first result."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Prescription (Doctor)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "if (json.data?.id) {",
+                  "  pm.collectionVariables.set('rxId', json.data.id);",
+                  "  console.log('📌 rxId saved:', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"medicationName\": \"Aspirin\",\n  \"dosage\": \"81mg\",\n  \"frequency\": \"Once daily with meals\",\n  \"duration\": \"90 days\",\n  \"instructions\": \"Take with a full glass of water. Do not crush or chew.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/appointments/{{appointmentId}}/prescriptions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "appointments", "{{appointmentId}}", "prescriptions"]
+            },
+            "description": "Add a prescription to an appointment. **Doctor role required.**\n\n**Auto-captures:** `rxId`"
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Prescription (Doctor)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/api/appointments/{{appointmentId}}/prescriptions/{{rxId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "appointments", "{{appointmentId}}", "prescriptions", "{{rxId}}"]
+            },
+            "description": "Remove a specific prescription. **Doctor role required.**\n\nUses `{{rxId}}` — auto-set by Add Prescription or Get Prescriptions."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🔔 Notifications",
+      "description": "In-app notifications (also pushed via Pusher). Notifications are created automatically on appointment events.\n\n**Auth:** Any authenticated user (own notifications only).",
+      "item": [
+        {
+          "name": "Get Notifications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('notifications shape', () => {",
+                  "  pm.expect(json.data).to.have.property('notifications');",
+                  "  pm.expect(json.data).to.have.property('unreadCount');",
+                  "});",
+                  "",
+                  "const notifs = json.data?.notifications;",
+                  "if (notifs?.length > 0) {",
+                  "  pm.collectionVariables.set('notificationId', notifs[0].id);",
+                  "  console.log('📌 notificationId saved:', notifs[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications"]
+            },
+            "description": "Returns the current user's notifications with `unreadCount`.\n\n**Auto-captures:** `notificationId` from first result."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark All as Read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/read-all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications", "read-all"]
+            },
+            "description": "Mark all of the current user's notifications as read in one call."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Single Notification as Read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/{{notificationId}}/read",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications", "{{notificationId}}", "read"]
+            },
+            "description": "Mark a single notification as read. Uses `{{notificationId}}` — auto-set by Get Notifications."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🤖 AI",
+      "description": "AI-powered doctor recommendations based on symptoms (Gemini).\n\n**Auth:** Patient role only.",
+      "item": [
+        {
+          "name": "Get Doctor Recommendations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('recommendations array', () => {",
+                  "  pm.expect(json.data?.recommendations).to.be.an('array');",
+                  "});",
+                  "",
+                  "// Save first recommended doctorId for downstream booking",
+                  "const recs = json.data?.recommendations;",
+                  "if (recs?.length > 0 && recs[0].doctors?.length > 0) {",
+                  "  const firstDoc = recs[0].doctors[0];",
+                  "  pm.collectionVariables.set('doctorId', firstDoc.id);",
+                  "  console.log('📌 doctorId updated from recommendation:', firstDoc.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"symptoms\": \"I've been experiencing chest tightness and shortness of breath when climbing stairs. Sometimes I feel palpitations in the evening.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/recommend",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai", "recommend"]
+            },
+            "description": "Sends symptoms to Gemini and returns matched specializations + available doctors.\n\n**Patient role only.**\n\n**Auto-captures:** `doctorId` from the first recommended doctor — ready for appointment booking."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
