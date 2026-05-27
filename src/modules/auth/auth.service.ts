@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { db } from "../../config/db";
+import { AppError } from "../../shared/types";
 import { authRepository } from "./auth.repository";
 import type { RegisterInput, LoginInput, JwtPayload } from "./auth.validators";
 import { env } from "../../config/env";
@@ -18,9 +19,7 @@ export const authService = {
     // 1. Check email uniqueness (outside tx — read only)
     const existing = await authRepository.findByEmail(input.email);
     if (existing) {
-      const error = new Error("Email is already in use") as Error & { statusCode: number };
-      error.statusCode = 409;
-      throw error;
+      throw new AppError("Email is already in use", 409);
     }
 
     // 2. Hash password (outside tx — CPU work)
@@ -83,9 +82,7 @@ export const authService = {
 
     // 3. Check account is active
     if (!user.isActive) {
-      const error = new Error("Account is deactivated") as Error & { statusCode: number };
-      error.statusCode = 403;
-      throw error;
+      throw new AppError("Account is deactivated", 403);
     }
 
     // 4. Update last login (fire-and-forget — don't block response)
@@ -132,7 +129,5 @@ function sanitizeUser(
 }
 
 function unauthorized() {
-  const error = new Error("Invalid email or password") as Error & { statusCode: number };
-  error.statusCode = 401;
-  return error;
+  return new AppError("Invalid email or password", 401);
 }

@@ -2,7 +2,8 @@ import type { Request, Response, NextFunction } from "express";
 import { authService } from "../../modules/auth/auth.service";
 
 // ---------------------------------------------------------------------------
-// authenticate  — verifies JWT and attaches decoded payload to req.user
+// authenticate — verifies JWT and attaches AuthUser to req.user
+// Maps payload.sub → user.id so every downstream handler uses req.user.id
 // ---------------------------------------------------------------------------
 export function authenticate(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
@@ -19,7 +20,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
 
   try {
     const payload = authService.verifyToken(token);
-    req.user = payload;
+    req.user = { id: payload.sub, email: payload.email, roles: payload.roles };
     next();
   } catch {
     res.status(401).json({
@@ -30,8 +31,8 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
 }
 
 // ---------------------------------------------------------------------------
-// requireRole  — guards a route to specific roles
-// Usage: router.get("/admin", authenticate, requireRole("admin"), handler)
+// requireRole — guards a route to specific roles
+// Usage: router.patch("/:id/status", authenticate, requireRole("doctor"), handler)
 // ---------------------------------------------------------------------------
 export function requireRole(...allowedRoles: string[]) {
   return (req: Request, res: Response, next: NextFunction) => {

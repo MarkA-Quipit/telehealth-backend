@@ -1,9 +1,9 @@
-import type { JwtPayload } from "../modules/auth/auth.validators";
+import type { AuthUser } from "../shared/types";
 
 declare global {
   namespace Express {
     interface Request {
-      user?: JwtPayload;
+      user?: AuthUser;
     }
   }
 }

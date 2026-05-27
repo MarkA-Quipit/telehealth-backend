@@ -7,11 +7,12 @@ export const authController = {
   // POST /api/auth/register
   // ---------------------------------------------------------------------------
   async register(req: Request, res: Response) {
-    const body = registerSchema.parse(req.body); // throws ZodError on invalid input
+    const body = registerSchema.parse(req.body);
     const result = await authService.register(body);
 
     res.status(201).json({
       success: true,
+      message: "Registered successfully",
       data: result,
     });
   },
@@ -25,17 +26,18 @@ export const authController = {
 
     res.status(200).json({
       success: true,
+      message: "Login successful",
       data: result,
     });
   },
 
   // ---------------------------------------------------------------------------
-  // GET /api/auth/me  (requires auth middleware)
+  // GET /api/auth/me  (requires authenticate middleware)
   // ---------------------------------------------------------------------------
   async me(req: Request, res: Response) {
-    // req.user is attached by auth middleware
     res.status(200).json({
       success: true,
+      message: "User retrieved",
       data: req.user,
     });
   },

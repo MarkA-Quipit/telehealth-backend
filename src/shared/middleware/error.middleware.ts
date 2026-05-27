@@ -1,12 +1,25 @@
 import type { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod/v4";
+import { AppError } from "../types";
 
 export function errorMiddleware(
   err: unknown,
-  req: Request,
+  _req: Request,
   res: Response,
-  next: NextFunction,
+  _next: NextFunction,
 ) {
+  // ---------------------------------------------------------------------------
+  // AppError — service-thrown errors with statusCode + optional field errors
+  // ---------------------------------------------------------------------------
+  if (err instanceof AppError) {
+    res.status(err.statusCode).json({
+      success: false,
+      message: err.message,
+      ...(err.errors.length > 0 ? { errors: err.errors } : {}),
+    });
+    return;
+  }
+
   // ---------------------------------------------------------------------------
   // Zod validation errors → 400
   // ---------------------------------------------------------------------------
@@ -18,18 +31,6 @@ export function errorMiddleware(
         field: issue.path.join("."),
         message: issue.message,
       })),
-    });
-    return;
-  }
-
-  // ---------------------------------------------------------------------------
-  // App errors with an attached statusCode
-  // ---------------------------------------------------------------------------
-  if (err instanceof Error && "statusCode" in err) {
-    const statusCode = (err as Error & { statusCode: number }).statusCode;
-    res.status(statusCode).json({
-      success: false,
-      message: err.message,
     });
     return;
   }
