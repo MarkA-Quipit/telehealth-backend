@@ -70,33 +70,6 @@ export const appointments = pgTable("appointments", {
 });
 
 // ---------------------------------------------------------------------------
-// consultation_notes  (one per completed appointment)
-// Doctor fills this after the session — notes + prescriptions
-// ---------------------------------------------------------------------------
-export const consultationNotes = pgTable("consultation_notes", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  appointmentId: uuid("appointment_id")
-    .notNull()
-    .unique()                                              // one note per appointment
-    .references(() => appointments.id, { onDelete: "cascade" }),
-
-  // Clinical content
-  chiefComplaint: text("chief_complaint"),
-  diagnosis: text("diagnosis"),
-  clinicalNotes: text("clinical_notes"),
-  recommendations: text("recommendations"),
-
-  // Prescriptions stored as structured JSON array:
-  // [{ medication: string, dosage: string, frequency: string, duration: string, notes?: string }]
-  prescriptions: text("prescriptions"),                   // JSON string — parsed in service layer
-
-  followUpDate: timestamp("follow_up_date", { withTimezone: true }),
-
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
 // notifications  (persistent inbox — Pusher handles real-time fanout)
 // ---------------------------------------------------------------------------
 export const notifications = pgTable("notifications", {
@@ -133,18 +106,7 @@ export const appointmentsRelations = relations(appointments, ({ one, many }) => 
     fields: [appointments.cancelledBy],
     references: [users.id],
   }),
-  consultationNote: one(consultationNotes, {
-    fields: [appointments.id],
-    references: [consultationNotes.appointmentId],
-  }),
   notifications: many(notifications),
-}));
-
-export const consultationNotesRelations = relations(consultationNotes, ({ one }) => ({
-  appointment: one(appointments, {
-    fields: [consultationNotes.appointmentId],
-    references: [appointments.id],
-  }),
 }));
 
 export const notificationsRelations = relations(notifications, ({ one }) => ({

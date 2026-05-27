@@ -13,6 +13,11 @@ export * from "./doctors/doctors.schema";
 // Patients
 export * from "./patients/patients.schema";
 
-// Appointments + Consultation Notes + Notifications
+// Appointments + Notifications
 export * from "./appointments/appointments.schema";
-// (notifications.schema.ts is a re-export shim, already covered above)
+
+// Consultation Notes (now its own module)
+export * from "./consultations/consultations.schema";
+
+// Prescriptions
+export * from "./prescriptions/prescriptions.schema";

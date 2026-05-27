@@ -24,6 +24,23 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/doctors/:id/slots?date=YYYY-MM-DD  — available time windows
+// ---------------------------------------------------------------------------
+router.get("/:id/slots", authenticate, async (req: Request<{ id: string }>, res: Response) => {
+  const { date } = req.query;
+  if (!date || typeof date !== "string") {
+    res.status(400).json({ success: false, message: "date query param is required (YYYY-MM-DD)" });
+    return;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    res.status(400).json({ success: false, message: "date must be in YYYY-MM-DD format" });
+    return;
+  }
+  const slots = await doctorsService.getAvailableSlots(req.params.id, date);
+  res.status(200).json({ success: true, message: "Available slots retrieved", data: slots });
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/doctors/:id
 // ---------------------------------------------------------------------------
 router.get("/:id", authenticate, async (req: Request<{ id: string }>, res: Response) => {
@@ -39,14 +56,5 @@ router.put("/:id", authenticate, async (req: Request<{ id: string }>, res: Respo
   const doctor = await doctorsService.updateDoctorProfile(req.user!.id, req.params.id, body);
   res.status(200).json({ success: true, message: "Doctor updated", data: doctor });
 });
-
-// ---------------------------------------------------------------------------
-// TODO (Day 3/4): availability + blocked-slots + slots endpoints
-// GET    /api/doctors/:id/availability
-// PUT    /api/doctors/:id/availability
-// POST   /api/doctors/:id/blocked-slots
-// DELETE /api/doctors/:id/blocked-slots/:slotId
-// GET    /api/doctors/:id/slots
-// ---------------------------------------------------------------------------
 
 export default router;

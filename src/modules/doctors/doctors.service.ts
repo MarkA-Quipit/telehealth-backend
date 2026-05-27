@@ -50,10 +50,10 @@ export const doctorsService = {
     return doctorsRepository.findById(updated.id);
   },
 
-  // ── TODO (Day 3/4): availability + blocked-slots + available-slots ────────
-
-  // setAvailability(requesterId, doctorId, slots) — TODO Day 3
-  // addBlockedSlot(requesterId, doctorId, data) — TODO Day 3
-  // deleteBlockedSlot(requesterId, doctorId, slotId) — TODO Day 3
-  // getAvailableSlots(doctorId, date) — TODO Day 4
+  // ── getAvailableSlots ─────────────────────────────────────────────────────
+  async getAvailableSlots(doctorId: string, date: string) {
+    const doctor = await doctorsRepository.findById(doctorId);
+    if (!doctor) throw new AppError("Doctor not found", 404);
+    return doctorsRepository.getAvailableSlots(doctorId, date);
+  },
 };

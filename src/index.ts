@@ -10,6 +10,8 @@ import usersRouter from "./modules/users/users.controller";
 import patientsRouter from "./modules/patients/patients.controller";
 import doctorsRouter from "./modules/doctors/doctors.controller";
 import appointmentsRouter from "./modules/appointments/appointments.controller";
+import consultationsRouter from "./modules/consultations/consultations.controller";
+import prescriptionsRouter from "./modules/prescriptions/prescriptions.controller";
 
 const app = express();
 
@@ -44,6 +46,8 @@ app.use("/api/users", usersRouter);
 app.use("/api/patients", patientsRouter);
 app.use("/api/doctors", doctorsRouter);
 app.use("/api/appointments", appointmentsRouter);
+app.use("/api/appointments/:appointmentId/notes", consultationsRouter);
+app.use("/api/appointments/:appointmentId/prescriptions", prescriptionsRouter);
 
 // ---------------------------------------------------------------------------
 // Error handler — must be last
