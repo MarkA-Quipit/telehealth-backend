@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "4f8a2c1b-9d3e-4a7f-b5c2-8e1d6f0a3b9c",
     "name": "Telehealth API",
-    "description": "# Telehealth API — Modular Postman Collection\n\n## How Credentials Work\n\n1. **Login as Patient** or **Login as Doctor** — the test script auto-captures the JWT and sets `currentToken` + the role-specific token variable.\n2. All requests inherit the collection-level `Bearer {{currentToken}}` auth — no manual header copying needed.\n3. Use **🔄 Activate Patient Token** or **🔄 Activate Doctor Token** (in the Auth folder) to switch the active role mid-session without re-logging in.\n\n## Collection Variables\n\n| Variable | Description |\n|---|---|\n| `baseUrl` | API base URL (default: `http://localhost:3000`) |\n| `currentToken` | Active JWT — auto-set by login requests |\n| `patientToken` | JWT captured from patient login |\n| `doctorToken` | JWT captured from doctor login |\n| `userId` | Auto-set after login / register |\n| `patientId` | Auto-set after patient login |\n| `doctorId` | Auto-set after doctor login |\n| `appointmentId` | Set after creating an appointment |\n| `notificationId` | Set from notification list |\n| `rxId` | Set after adding a prescription |\n| `blockedSlotId` | Set after blocking a doctor slot |\n\n## Seeded Demo Credentials\n\n| Role | Email | Password |\n|---|---|---|\n| Doctor | `doctor1@demo.com` | `password123` |\n| Doctor | `doctor2@demo.com` | `password123` |\n| Patient | `patient1@demo.com` | `password123` |",
+    "description": "# Telehealth API — Modular Postman Collection\n\n## Role Badge Legend\n\nEvery request name is prefixed with a role badge so you know at a glance who can call it:\n\n| Badge | Meaning |\n|---|---|\n| `[PUBLIC]` | No authentication required |\n| `[ANY]` | Any authenticated user (patient **or** doctor) |\n| `[OWN]` | Any authenticated user — but only their **own** resource |\n| `[PATIENT]` | Patient role only (`patientToken`) |\n| `[DOCTOR]` | Doctor role only (`doctorToken`) |\n\n## How Credentials Flow\n\n1. **Login as Patient** or **Login as Doctor** — the test script auto-captures the JWT and sets `currentToken` + the role-specific token variable.\n2. All requests inherit the collection-level `Bearer {{currentToken}}` auth — no manual header copying needed.\n3. Use **🔄 Activate Patient Token** or **🔄 Activate Doctor Token** (in the Auth folder) to switch the active role mid-session without re-logging in.\n\n## Collection Variables\n\n| Variable | Description |\n|---|---|\n| `baseUrl` | API base URL (default: `http://localhost:3000`) |\n| `currentToken` | Active JWT — auto-set by login requests |\n| `patientToken` | JWT captured from patient login |\n| `doctorToken` | JWT captured from doctor login |\n| `userId` | Auto-set after login / register |\n| `patientId` | Auto-set after patient login |\n| `doctorId` | Auto-set after doctor login |\n| `appointmentId` | Set after creating an appointment |\n| `notificationId` | Set from notification list |\n| `rxId` | Set after adding a prescription |\n| `blockedSlotId` | Set after blocking a doctor slot |\n\n## Seeded Demo Credentials\n\n| Role | Email | Password |\n|---|---|---|\n| Doctor | `doctor1@demo.com` | `password123` |\n| Doctor | `doctor2@demo.com` | `password123` |\n| Patient | `patient1@demo.com` | `password123` |",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -89,7 +89,7 @@
       "description": "Liveness and readiness checks — no auth required.",
       "item": [
         {
-          "name": "Server Health",
+          "name": "[PUBLIC] Server Health",
           "request": {
             "auth": { "type": "noauth" },
             "method": "GET",
@@ -98,12 +98,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["health"]
             },
-            "description": "Returns `{ status: 'ok', timestamp }`. No auth required."
+            "description": "**Required Role:** `PUBLIC` — No authentication needed.\n\n---\n\nReturns `{ status: 'ok', timestamp }`. Use this to verify the server is running before making any other requests."
           },
           "response": []
         },
         {
-          "name": "Database Health",
+          "name": "[PUBLIC] Database Health",
           "request": {
             "auth": { "type": "noauth" },
             "method": "GET",
@@ -112,7 +112,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["health", "db"]
             },
-            "description": "Pings the Neon PostgreSQL database. Returns `{ status: 'db connected' }` or `500` on error."
+            "description": "**Required Role:** `PUBLIC` — No authentication needed.\n\n---\n\nPings the Neon PostgreSQL database with `SELECT 1`. Returns `{ status: 'db connected' }` on success or `500` if the DB is unreachable."
           },
           "response": []
         }
@@ -120,10 +120,10 @@
     },
     {
       "name": "🔐 Auth",
-      "description": "Authentication endpoints plus role-switching helpers.\n\n**Flow:**\n1. Run `Login as Patient` or `Login as Doctor` — token auto-captures.\n2. Use `🔄 Activate Patient Token` / `🔄 Activate Doctor Token` to switch mid-session.",
+      "description": "Authentication endpoints plus role-switching helpers.\n\n| Request | Role |\n|---|---|\n| Register | `PUBLIC` |\n| Login | `PUBLIC` |\n| Get Current User | `ANY` |\n| Role switchers | Helper only |\n\n**Flow:**\n1. Run `Login as Patient` or `Login as Doctor` — token auto-captures.\n2. Use `🔄 Activate Patient Token` / `🔄 Activate Doctor Token` to switch mid-session.",
       "item": [
         {
-          "name": "Register — Patient",
+          "name": "[PUBLIC] Register — Patient",
           "event": [
             {
               "listen": "test",
@@ -161,12 +161,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "auth", "register"]
             },
-            "description": "Register a new patient account. Role must be `patient` or `doctor`.\n\n**Auto-captures:** `patientToken`, `currentToken`, `userId`, `patientId`"
+            "description": "**Required Role:** `PUBLIC` — No authentication needed.\n\n---\n\nRegister a new patient account. The `role` field must be `patient` or `doctor`.\n\n**Validation:**\n- `email` — valid format, max 255 chars\n- `password` — min 8 chars\n- `firstName` / `lastName` — 1–100 chars\n- `role` — enum: `patient` | `doctor`\n\n**Auto-captures on success:** `patientToken`, `currentToken`, `userId`, `patientId`"
           },
           "response": []
         },
         {
-          "name": "Register — Doctor",
+          "name": "[PUBLIC] Register — Doctor",
           "event": [
             {
               "listen": "test",
@@ -204,12 +204,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "auth", "register"]
             },
-            "description": "Register a new doctor account.\n\n**Auto-captures:** `doctorToken`, `currentToken`, `userId`, `doctorId`"
+            "description": "**Required Role:** `PUBLIC` — No authentication needed.\n\n---\n\nRegister a new doctor account. Same endpoint as patient registration — role is determined by the `role` field.\n\n**Auto-captures on success:** `doctorToken`, `currentToken`, `userId`, `doctorId`"
           },
           "response": []
         },
         {
-          "name": "Login — Patient",
+          "name": "[PUBLIC] Login — Patient",
           "event": [
             {
               "listen": "test",
@@ -247,12 +247,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "auth", "login"]
             },
-            "description": "Login with seeded patient credentials.\n\n**Seeded:** `patient1@demo.com` / `password123`\n\n**Auto-captures:** `patientToken`, `currentToken`, `userId`"
+            "description": "**Required Role:** `PUBLIC` — No authentication needed.\n\n---\n\nLogin with seeded patient credentials. Returns a JWT valid for 7 days.\n\n**Seeded demo:** `patient1@demo.com` / `password123`\n\n**Auto-captures on success:** `patientToken`, `currentToken`, `userId`\n\n> After running this, all `[ANY]`, `[OWN]`, and `[PATIENT]` requests will use this token automatically."
           },
           "response": []
         },
         {
-          "name": "Login — Doctor 1 (Cardiologist)",
+          "name": "[PUBLIC] Login — Doctor 1 (Cardiologist)",
           "event": [
             {
               "listen": "test",
@@ -290,12 +290,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "auth", "login"]
             },
-            "description": "Login as Dr. Maria Santos (Cardiologist).\n\n**Seeded:** `doctor1@demo.com` / `password123`\n\n**Auto-captures:** `doctorToken`, `currentToken`, `userId`"
+            "description": "**Required Role:** `PUBLIC` — No authentication needed.\n\n---\n\nLogin as **Dr. Maria Santos** (Cardiology, PRC-12345). Mon–Fri 09:00–17:00.\n\n**Seeded demo:** `doctor1@demo.com` / `password123`\n\n**Auto-captures on success:** `doctorToken`, `currentToken`, `userId`\n\n> After running this, all `[ANY]`, `[OWN]`, and `[DOCTOR]` requests will use this token automatically."
           },
           "response": []
         },
         {
-          "name": "Login — Doctor 2 (General Practice)",
+          "name": "[PUBLIC] Login — Doctor 2 (General Practice)",
           "event": [
             {
               "listen": "test",
@@ -331,12 +331,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "auth", "login"]
             },
-            "description": "Login as Dr. Jose Reyes (General Practice).\n\n**Seeded:** `doctor2@demo.com` / `password123`"
+            "description": "**Required Role:** `PUBLIC` — No authentication needed.\n\n---\n\nLogin as **Dr. Jose Reyes** (General Practice, PRC-67890). Mon/Wed/Fri 08:00–16:00.\n\n**Seeded demo:** `doctor2@demo.com` / `password123`\n\n**Auto-captures on success:** `doctorToken`, `currentToken`, `userId`"
           },
           "response": []
         },
         {
-          "name": "Get Current User (me)",
+          "name": "[ANY] Get Current User (me)",
           "event": [
             {
               "listen": "test",
@@ -361,7 +361,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "auth", "me"]
             },
-            "description": "Returns the authenticated user's profile from the JWT. Requires `currentToken` to be set."
+            "description": "**Required Role:** `ANY` — Any authenticated user (patient or doctor).\n\n---\n\nReturns the JWT payload for the current `currentToken`: `id`, `email`, `roles`. Useful for confirming which account is active.\n\n**Returns:** `401` if no token is set."
           },
           "response": []
         },
@@ -375,13 +375,13 @@
                 "exec": [
                   "const t = pm.collectionVariables.get('patientToken');",
                   "if (!t) {",
-                  "  console.warn('⚠ patientToken is empty — run \"Login — Patient\" first');",
+                  "  console.warn('⚠ patientToken is empty — run \"[PUBLIC] Login — Patient\" first');",
                   "} else {",
                   "  pm.collectionVariables.set('currentToken', t);",
                   "  console.log('🔄 Switched to Patient token');",
                   "}",
-                  "// Abort the actual request (it's just a helper)",
-                  "throw new Error('Role switched to Patient — this request intentionally aborted');"
+                  "// Abort the actual HTTP request — this is a helper only",
+                  "throw new Error('Role switched to PATIENT — request intentionally aborted');"
                 ]
               }
             }
@@ -394,7 +394,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["health"]
             },
-            "description": "**Helper — not a real API call.**\n\nSets `currentToken` to the saved `patientToken`. Run this to switch the active role to Patient mid-session.\n\nThe pre-request script switches the token and aborts the request so you don't hit the server."
+            "description": "**Helper — not a real API call.** No role required.\n\n---\n\nSets `currentToken = patientToken` so the next request runs as a patient. The pre-request script swaps the token and intentionally aborts before hitting the server.\n\n**Use when:** You've been testing doctor endpoints and need to switch back to a patient context without re-logging in."
           },
           "response": []
         },
@@ -408,12 +408,12 @@
                 "exec": [
                   "const t = pm.collectionVariables.get('doctorToken');",
                   "if (!t) {",
-                  "  console.warn('⚠ doctorToken is empty — run \"Login — Doctor\" first');",
+                  "  console.warn('⚠ doctorToken is empty — run \"[PUBLIC] Login — Doctor\" first');",
                   "} else {",
                   "  pm.collectionVariables.set('currentToken', t);",
                   "  console.log('🔄 Switched to Doctor token');",
                   "}",
-                  "throw new Error('Role switched to Doctor — this request intentionally aborted');"
+                  "throw new Error('Role switched to DOCTOR — request intentionally aborted');"
                 ]
               }
             }
@@ -426,7 +426,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["health"]
             },
-            "description": "**Helper — not a real API call.**\n\nSets `currentToken` to the saved `doctorToken`. Run this to switch the active role to Doctor mid-session."
+            "description": "**Helper — not a real API call.** No role required.\n\n---\n\nSets `currentToken = doctorToken` so the next request runs as a doctor. The pre-request script swaps the token and intentionally aborts before hitting the server.\n\n**Use when:** You're testing `[DOCTOR]` endpoints after having logged in as a patient."
           },
           "response": []
         }
@@ -434,10 +434,10 @@
     },
     {
       "name": "👤 Users",
-      "description": "User profile management and avatar upload.\n\n**Auth:** Any authenticated user. Users can only update/upload for their own ID.",
+      "description": "User profile management and avatar upload.\n\n| Request | Role |\n|---|---|\n| Get User by ID | `ANY` |\n| Update User | `OWN` — own profile only |\n| Upload Avatar | `OWN` — own avatar only |",
       "item": [
         {
-          "name": "Get User by ID",
+          "name": "[ANY] Get User by ID",
           "event": [
             {
               "listen": "test",
@@ -460,12 +460,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "users", "{{userId}}"]
             },
-            "description": "Fetch a user by their UUID. Uses `{{userId}}` — set this after login."
+            "description": "**Required Role:** `ANY` — Any authenticated user (patient or doctor).\n\n---\n\nFetch a user by their UUID. Any authenticated user can look up any user by ID.\n\nUses `{{userId}}` — auto-set after login. To look up a different user, replace `{{userId}}` with their UUID directly."
           },
           "response": []
         },
         {
-          "name": "Update User",
+          "name": "[OWN] Update User",
           "event": [
             {
               "listen": "test",
@@ -496,12 +496,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "users", "{{userId}}"]
             },
-            "description": "Update user profile fields (firstName, lastName, phone). Only the user themselves can update their own profile."
+            "description": "**Required Role:** `OWN` — Any authenticated user, but only for their **own** profile.\n\n> Attempting to update another user's ID returns `403 Forbidden`.\n\n---\n\nUpdate profile fields. All fields are optional — only send what you want to change.\n\n**Updatable fields:** `firstName`, `lastName`, `phone`"
           },
           "response": []
         },
         {
-          "name": "Upload Avatar",
+          "name": "[OWN] Upload Avatar",
           "request": {
             "method": "POST",
             "body": {
@@ -520,7 +520,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "users", "{{userId}}", "avatar"]
             },
-            "description": "Upload a profile picture. Uploaded to Cloudinary. Accepts `image/jpeg`, `image/png`, `image/webp` — max 5 MB.\n\nUse `form-data` body with key `file`."
+            "description": "**Required Role:** `OWN` — Any authenticated user, but only for their **own** avatar.\n\n> Attempting to upload to another user's ID returns `403 Forbidden`.\n\n---\n\nUpload a profile picture. The file is stored in Cloudinary and the URL is saved to the user record.\n\n**Body:** `form-data` with key `file`\n**Accepted types:** `image/jpeg`, `image/png`, `image/webp`\n**Max size:** 5 MB"
           },
           "response": []
         }
@@ -528,10 +528,10 @@
     },
     {
       "name": "🧑‍⚕️ Patients",
-      "description": "Patient profile management (medical history, emergency contact, etc.).\n\n**Auth:** Requires `patientToken` (`currentToken` must be set to patient JWT).",
+      "description": "Patient profile management (medical history, emergency contact, etc.).\n\n| Request | Role |\n|---|---|\n| Get Patient Profile | `ANY` |\n| Update Patient Profile | `OWN` — patient, own profile only |",
       "item": [
         {
-          "name": "Get Patient Profile",
+          "name": "[ANY] Get Patient Profile",
           "event": [
             {
               "listen": "test",
@@ -556,12 +556,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "patients", "{{patientId}}"]
             },
-            "description": "Retrieve a patient's full profile including medical history.\n\n**Tip:** After running, `patientId` is auto-captured."
+            "description": "**Required Role:** `ANY` — Any authenticated user (patient or doctor).\n\n---\n\nRetrieve a patient's full profile including medical history, blood type, allergies, and emergency contact. Doctors use this to review patient details before a consultation.\n\nUses `{{patientId}}` — auto-captured after patient login.\n\n**Auto-captures:** `patientId` from response."
           },
           "response": []
         },
         {
-          "name": "Update Patient Profile",
+          "name": "[OWN] Update Patient Profile",
           "event": [
             {
               "listen": "test",
@@ -589,7 +589,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "patients", "{{patientId}}"]
             },
-            "description": "Update patient medical information. Partial updates supported — only send fields you want to change."
+            "description": "**Required Role:** `OWN` — Authenticated user updating **their own** patient profile.\n\n> A doctor attempting to update a patient profile they don't own returns `403 Forbidden`.\n\n---\n\nUpdate patient medical information. All fields are optional — only send what you want to change.\n\n**Updatable fields:** `dateOfBirth`, `gender`, `bloodType`, `allergies`, `currentMedications`, `medicalHistory`, `emergencyContactName`, `emergencyContactPhone`, `emergencyContactRelationship`"
           },
           "response": []
         }
@@ -597,10 +597,10 @@
     },
     {
       "name": "👨‍⚕️ Doctors",
-      "description": "Doctor discovery, profile management, availability, and slot blocking.\n\n**Role notes:**\n- `GET` endpoints: any authenticated user\n- `PUT`, `POST`, `DELETE` on a doctor's own resources: requires doctor role (`doctorToken`)",
+      "description": "Doctor discovery, profile management, availability, and slot blocking.\n\n| Request | Role |\n|---|---|\n| List Doctors | `ANY` |\n| Get Doctor by ID | `ANY` |\n| Update Doctor Profile | `DOCTOR` (own only) |\n| Get Availability | `ANY` |\n| Update Availability | `DOCTOR` (own only) |\n| Get Available Slots | `ANY` |\n| Get Blocked Slots | `ANY` |\n| Block a Time Slot | `DOCTOR` (own only) |\n| Unblock a Time Slot | `DOCTOR` (own only) |",
       "item": [
         {
-          "name": "List Doctors",
+          "name": "[ANY] List Doctors",
           "event": [
             {
               "listen": "test",
@@ -633,16 +633,16 @@
               "query": [
                 { "key": "page", "value": "1" },
                 { "key": "limit", "value": "20" },
-                { "key": "specialization", "value": "", "disabled": true, "description": "e.g. Cardiology" },
-                { "key": "search", "value": "", "disabled": true, "description": "Search name or bio" }
+                { "key": "specialization", "value": "", "disabled": true, "description": "e.g. Cardiology, General Practice" },
+                { "key": "search", "value": "", "disabled": true, "description": "Search doctor name or bio" }
               ]
             },
-            "description": "Paginated list of all doctors. Optional query filters:\n- `specialization` — e.g. `Cardiology`\n- `search` — searches name and bio\n- `page`, `limit` — pagination (default: 1, 20)\n\n**Auto-captures:** `doctorId` from first result"
+            "description": "**Required Role:** `ANY` — Any authenticated user (patient or doctor).\n\n---\n\nPaginated list of all doctors. Used by patients to browse and select a doctor before booking.\n\n**Optional query filters:**\n- `specialization` — exact match, e.g. `Cardiology`\n- `search` — searches name and bio fields\n- `page`, `limit` — pagination (default: 1, 20 — max limit: 50)\n\n**Auto-captures:** `doctorId` from the first result for use in downstream requests."
           },
           "response": []
         },
         {
-          "name": "Get Doctor by ID",
+          "name": "[ANY] Get Doctor by ID",
           "event": [
             {
               "listen": "test",
@@ -662,12 +662,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "doctors", "{{doctorId}}"]
             },
-            "description": "Get a single doctor's full profile including availability summary."
+            "description": "**Required Role:** `ANY` — Any authenticated user (patient or doctor).\n\n---\n\nGet a single doctor's full profile: specialization, bio, years of experience, consultation fee, and accepting-patients status.\n\nUses `{{doctorId}}` — auto-set by List Doctors or by a doctor's own login."
           },
           "response": []
         },
         {
-          "name": "Update Doctor Profile",
+          "name": "[DOCTOR] Update Doctor Profile",
           "event": [
             {
               "listen": "test",
@@ -694,12 +694,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "doctors", "{{doctorId}}"]
             },
-            "description": "Update a doctor's profile. **Must be logged in as the doctor** (`doctorToken` active)."
+            "description": "**Required Role:** `DOCTOR` — Must be logged in as a doctor AND updating their own profile.\n\n> Returns `403 Forbidden` if a patient attempts this, or if a doctor tries to update another doctor's profile.\n\n> ⚠️ Run **🔄 Activate Doctor Token** first if you've been testing as a patient.\n\n---\n\nUpdate a doctor's profile fields. All fields optional — only send what needs changing.\n\n**Updatable fields:** `bio`, `consultationFee`, `isAcceptingPatients`, `yearsOfExperience`, `specialization`, `licenseNumber`"
           },
           "response": []
         },
         {
-          "name": "Get Doctor Availability",
+          "name": "[ANY] Get Doctor Availability",
           "event": [
             {
               "listen": "test",
@@ -719,12 +719,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "doctors", "{{doctorId}}", "availability"]
             },
-            "description": "Returns the doctor's weekly availability schedule (day of week + time windows)."
+            "description": "**Required Role:** `ANY` — Any authenticated user (patient or doctor).\n\n---\n\nReturns the doctor's weekly recurring schedule — which days they work and their start/end times.\n\n**Response shape:**\n```json\n[\n  { \"dayOfWeek\": \"monday\", \"startTime\": \"09:00\", \"endTime\": \"17:00\", \"isActive\": true }\n]\n```"
           },
           "response": []
         },
         {
-          "name": "Update Doctor Availability",
+          "name": "[DOCTOR] Update Doctor Availability",
           "event": [
             {
               "listen": "test",
@@ -743,7 +743,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "[\n  { \"dayOfWeek\": \"monday\",    \"startTime\": \"09:00\", \"endTime\": \"17:00\", \"isAvailable\": true },\n  { \"dayOfWeek\": \"tuesday\",   \"startTime\": \"09:00\", \"endTime\": \"17:00\", \"isAvailable\": true },\n  { \"dayOfWeek\": \"wednesday\", \"startTime\": \"09:00\", \"endTime\": \"13:00\", \"isAvailable\": true },\n  { \"dayOfWeek\": \"thursday\",  \"startTime\": \"09:00\", \"endTime\": \"17:00\", \"isAvailable\": true },\n  { \"dayOfWeek\": \"friday\",    \"startTime\": \"09:00\", \"endTime\": \"17:00\", \"isAvailable\": true },\n  { \"dayOfWeek\": \"saturday\",  \"startTime\": \"09:00\", \"endTime\": \"12:00\", \"isAvailable\": false }\n]",
+              "raw": "{\n  \"availability\": [\n    { \"dayOfWeek\": 1, \"startTime\": \"09:00\", \"endTime\": \"17:00\", \"isAvailable\": true },\n    { \"dayOfWeek\": 2, \"startTime\": \"09:00\", \"endTime\": \"17:00\", \"isAvailable\": true },\n    { \"dayOfWeek\": 3, \"startTime\": \"09:00\", \"endTime\": \"13:00\", \"isAvailable\": true },\n    { \"dayOfWeek\": 4, \"startTime\": \"09:00\", \"endTime\": \"17:00\", \"isAvailable\": true },\n    { \"dayOfWeek\": 5, \"startTime\": \"09:00\", \"endTime\": \"17:00\", \"isAvailable\": true },\n    { \"dayOfWeek\": 6, \"startTime\": \"09:00\", \"endTime\": \"12:00\", \"isAvailable\": false }\n  ]\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -751,12 +751,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "doctors", "{{doctorId}}", "availability"]
             },
-            "description": "Replace the doctor's weekly schedule. **Doctor role required.**\n\n`isAvailable: false` marks the day as off even if a time window is provided."
+            "description": "**Required Role:** `DOCTOR` — Must be logged in as the doctor whose availability is being updated.\n\n> Returns `403 Forbidden` for patients or for a doctor trying to update another doctor's schedule.\n\n> ⚠️ Run **🔄 Activate Doctor Token** first if needed.\n\n---\n\nFully replace the doctor's weekly schedule. Body must be an **object** with an `availability` array — **not** a bare array.\n\n**`dayOfWeek` is a number (0–6), not a string:**\n\n| Number | Day |\n|---|---|\n| 0 | Sunday |\n| 1 | Monday |\n| 2 | Tuesday |\n| 3 | Wednesday |\n| 4 | Thursday |\n| 5 | Friday |\n| 6 | Saturday |\n\n**Validation:**\n- `dayOfWeek` — integer `0–6`\n- `startTime` / `endTime` — `HH:MM` format\n- `isAvailable: false` — marks the day as off even if times are provided"
           },
           "response": []
         },
         {
-          "name": "Get Available Booking Slots",
+          "name": "[ANY] Get Available Booking Slots",
           "event": [
             {
               "listen": "test",
@@ -783,12 +783,12 @@
                 }
               ]
             },
-            "description": "Returns available 30-minute booking windows for a specific date. Excludes already-booked slots and blocked slots.\n\n**Required query param:** `date` in `YYYY-MM-DD` format."
+            "description": "**Required Role:** `ANY` — Any authenticated user (patient or doctor).\n\n---\n\nReturns the list of available 30-minute booking windows for a specific date. The algorithm:\n1. Looks up the doctor's weekly schedule for that day of the week\n2. Subtracts already-booked appointments\n3. Subtracts manually blocked slots\n4. Returns remaining open windows\n\n**Required query param:** `date` in `YYYY-MM-DD` format — must be a future date."
           },
           "response": []
         },
         {
-          "name": "Get Blocked Slots",
+          "name": "[ANY] Get Blocked Slots",
           "event": [
             {
               "listen": "test",
@@ -812,12 +812,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "doctors", "{{doctorId}}", "blocked-slots"]
             },
-            "description": "List all manually blocked time slots for this doctor.\n\n**Auto-captures:** `blockedSlotId` from first result."
+            "description": "**Required Role:** `ANY` — Any authenticated user (patient or doctor).\n\n---\n\nList all manually blocked time slots for this doctor. These slots are excluded from the available-slots algorithm.\n\n**Auto-captures:** `blockedSlotId` from the first result for use in Unblock a Time Slot."
           },
           "response": []
         },
         {
-          "name": "Block a Time Slot",
+          "name": "[DOCTOR] Block a Time Slot",
           "event": [
             {
               "listen": "test",
@@ -841,7 +841,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"blockedAt\": \"2026-06-03T10:00:00.000Z\",\n  \"reason\": \"Personal appointment\"\n}",
+              "raw": "{\n  \"blockedDate\": \"2026-06-03\",\n  \"startTime\": \"10:00\",\n  \"endTime\": \"11:00\",\n  \"reason\": \"Personal appointment\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -849,12 +849,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "doctors", "{{doctorId}}", "blocked-slots"]
             },
-            "description": "Block a specific datetime slot. **Doctor role required.**\n\n**Auto-captures:** `blockedSlotId`"
+            "description": "**Required Role:** `DOCTOR` — Must be logged in as the doctor blocking the slot (own schedule only).\n\n> Returns `403 Forbidden` for patients or for a doctor blocking another doctor's slot.\n\n> ⚠️ Run **🔄 Activate Doctor Token** first if needed.\n\n---\n\nManually block a specific date + time window so patients cannot book it through the slot picker.\n\n**Fields:**\n- `blockedDate` — `YYYY-MM-DD` date of the block (required)\n- `startTime` — `HH:MM` start of the blocked window (required)\n- `endTime` — `HH:MM` end of the blocked window (required)\n- `reason` — optional note for internal reference, max 200 chars\n\n**Auto-captures:** `blockedSlotId`"
           },
           "response": []
         },
         {
-          "name": "Unblock a Time Slot",
+          "name": "[DOCTOR] Unblock a Time Slot",
           "event": [
             {
               "listen": "test",
@@ -873,7 +873,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "doctors", "{{doctorId}}", "blocked-slots", "{{blockedSlotId}}"]
             },
-            "description": "Remove a previously blocked slot. **Doctor role required.**\n\nUses `{{blockedSlotId}}` — auto-set by Block or Get Blocked Slots."
+            "description": "**Required Role:** `DOCTOR` — Must be logged in as the doctor who owns the blocked slot.\n\n> Returns `403 Forbidden` for patients or for a doctor removing another doctor's block.\n\n> ⚠️ Run **🔄 Activate Doctor Token** first if needed.\n\n---\n\nRemove a previously blocked time slot, making it available for patient booking again.\n\nUses `{{blockedSlotId}}` — auto-set by **[DOCTOR] Block a Time Slot** or **[ANY] Get Blocked Slots**."
           },
           "response": []
         }
@@ -881,10 +881,10 @@
     },
     {
       "name": "📅 Appointments",
-      "description": "Appointment lifecycle: book, list, view, reschedule, cancel, and update status.\n\n**Role notes:**\n- Create: patient only\n- List / Get: any authenticated user (results filtered by role)\n- Patch status: doctor only\n- Delete/cancel: either role",
+      "description": "Appointment lifecycle: book, list, view, update status, and cancel.\n\n| Request | Role |\n|---|---|\n| Create Appointment | `PATIENT` |\n| List Appointments | `ANY` (role-filtered results) |\n| Get Appointment by ID | `ANY` (own appointment only) |\n| Update Status | `DOCTOR` |\n| Cancel Appointment | `ANY` (own appointment only) |",
       "item": [
         {
-          "name": "Create Appointment",
+          "name": "[PATIENT] Create Appointment",
           "event": [
             {
               "listen": "test",
@@ -916,12 +916,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "appointments"]
             },
-            "description": "Book a new appointment. **Patient role required.**\n\n`scheduledAt` must be a future ISO timestamp. `durationMinutes` defaults to 30 if omitted.\n\n**Auto-captures:** `appointmentId`"
+            "description": "**Required Role:** `PATIENT` — Only patients can book appointments.\n\n> Returns `403 Forbidden` if a doctor attempts to create an appointment.\n\n> ⚠️ Run **🔄 Activate Patient Token** first if you've been testing as a doctor.\n\n---\n\nBook a new appointment with a doctor. The slot must be within the doctor's available windows and must not conflict with existing bookings.\n\n**Validation:**\n- `doctorId` — valid UUID of an existing doctor\n- `scheduledAt` — ISO timestamp, must be a **future** datetime\n- `durationMinutes` — optional, defaults to `30`\n- `reasonForVisit` — optional, max 500 chars\n\n**On success:** Creates the appointment + sends notifications to both patient and doctor via Pusher.\n\n**Auto-captures:** `appointmentId`"
           },
           "response": []
         },
         {
-          "name": "List Appointments",
+          "name": "[ANY] List Appointments",
           "event": [
             {
               "listen": "test",
@@ -954,15 +954,15 @@
               "query": [
                 { "key": "page", "value": "1" },
                 { "key": "limit", "value": "20" },
-                { "key": "status", "value": "", "disabled": true, "description": "Filter: pending | confirmed | completed | cancelled" }
+                { "key": "status", "value": "", "disabled": true, "description": "pending | confirmed | completed | cancelled" }
               ]
             },
-            "description": "List appointments for the current user. Results are automatically filtered by role:\n- **Patient** → their own appointments\n- **Doctor** → appointments assigned to them\n\nOptional `status` filter: `pending`, `confirmed`, `completed`, `cancelled`"
+            "description": "**Required Role:** `ANY` — Any authenticated user, but results are **automatically filtered by role**:\n\n- **Patient** → sees only their own appointments\n- **Doctor** → sees only appointments where they are the assigned doctor\n\n---\n\nReturns a paginated list with the same endpoint for both roles — the service filters based on the JWT.\n\n**Optional `status` filter:** `pending`, `confirmed`, `completed`, `cancelled`\n\n**Auto-captures:** `appointmentId` from the first result (if not already set)."
           },
           "response": []
         },
         {
-          "name": "Get Appointment by ID",
+          "name": "[ANY] Get Appointment by ID",
           "event": [
             {
               "listen": "test",
@@ -982,12 +982,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "appointments", "{{appointmentId}}"]
             },
-            "description": "Get a single appointment's full detail. Both the patient and the doctor can access their shared appointment."
+            "description": "**Required Role:** `ANY` — Any authenticated user who is a **party to the appointment** (the patient who booked it or the doctor it's assigned to).\n\n> Returns `403 Forbidden` if you try to access an appointment you're not part of.\n\n---\n\nGet the full detail of a single appointment, including patient info, doctor info, status, and timestamps.\n\nUses `{{appointmentId}}` — auto-set by Create Appointment or List Appointments."
           },
           "response": []
         },
         {
-          "name": "Update Appointment Status (Doctor)",
+          "name": "[DOCTOR] Update Appointment Status",
           "event": [
             {
               "listen": "test",
@@ -1014,12 +1014,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "appointments", "{{appointmentId}}", "status"]
             },
-            "description": "Update appointment status. **Doctor role required.**\n\nValid transitions:\n- `pending` → `confirmed`\n- `confirmed` → `completed`\n\nStatus values: `pending`, `confirmed`, `completed`, `cancelled`"
+            "description": "**Required Role:** `DOCTOR` — Only the assigned doctor can update an appointment's status.\n\n> Returns `403 Forbidden` for patients.\n\n> ⚠️ Run **🔄 Activate Doctor Token** first if needed.\n\n---\n\nChange the appointment status. Valid transitions:\n\n| From | To | Meaning |\n|---|---|---|\n| `pending` | `confirmed` | Doctor accepts the booking |\n| `confirmed` | `completed` | Consultation is done |\n\n**Status values:** `pending` → `confirmed` → `completed`\n\n> Use the **[ANY] Cancel Appointment** DELETE endpoint to cancel instead."
           },
           "response": []
         },
         {
-          "name": "Cancel Appointment",
+          "name": "[ANY] Cancel Appointment",
           "event": [
             {
               "listen": "test",
@@ -1046,7 +1046,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "appointments", "{{appointmentId}}"]
             },
-            "description": "Cancel an appointment. Either the patient or the doctor can cancel. An optional `reason` can be provided in the body."
+            "description": "**Required Role:** `ANY` — Either the **patient who booked** or the **assigned doctor** can cancel.\n\n> Returns `403 Forbidden` if you try to cancel an appointment you're not a party to.\n\n---\n\nCancel an appointment. The body `reason` field is optional but recommended for audit purposes.\n\nSends cancellation notifications to both parties via Pusher."
           },
           "response": []
         }
@@ -1054,10 +1054,10 @@
     },
     {
       "name": "📝 Consultation Notes",
-      "description": "Consultation notes are scoped to an appointment.\n\n**Base path:** `/api/appointments/:appointmentId/notes`\n\n**Auth:** Doctor can create/update; both roles can read.",
+      "description": "Consultation notes are scoped to an appointment.\n\n**Base path:** `/api/appointments/:appointmentId/notes`\n\n| Request | Role |\n|---|---|\n| Get Notes | `ANY` (appointment parties only) |\n| Create / Update Notes | `DOCTOR` (assigned doctor only) |",
       "item": [
         {
-          "name": "Get Notes for Appointment",
+          "name": "[ANY] Get Notes for Appointment",
           "event": [
             {
               "listen": "test",
@@ -1076,12 +1076,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "appointments", "{{appointmentId}}", "notes"]
             },
-            "description": "Retrieve the consultation note for a specific appointment. Returns `404` if no notes exist yet."
+            "description": "**Required Role:** `ANY` — Any authenticated user who is a **party to the appointment** (the patient or the assigned doctor).\n\n> Returns `403 Forbidden` for unrelated users.\n> Returns `404` if no notes have been written yet for this appointment.\n\n---\n\nRetrieve the consultation note for a specific appointment. Patients use this to read the doctor's diagnosis and treatment plan after their consultation."
           },
           "response": []
         },
         {
-          "name": "Create / Update Notes (Doctor)",
+          "name": "[DOCTOR] Create / Update Notes",
           "event": [
             {
               "listen": "test",
@@ -1100,7 +1100,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"chiefComplaint\": \"Patient presents with chest pain and shortness of breath on exertion.\",\n  \"diagnosis\": \"Stable angina pectoris\",\n  \"treatmentPlan\": \"Lifestyle modification, low-dose aspirin, and follow-up stress test in 2 weeks.\",\n  \"followUpDate\": \"2026-06-16T09:00:00.000Z\",\n  \"additionalNotes\": \"Advised patient to monitor blood pressure daily and report any acute episodes.\"\n}",
+              "raw": "{\n  \"chiefComplaint\": \"Patient presents with chest pain and shortness of breath on exertion.\",\n  \"diagnosis\": \"Stable angina pectoris\",\n  \"notes\": \"Lifestyle modification advised. Low-dose aspirin prescribed. Follow-up stress test in 2 weeks. Patient to monitor blood pressure daily and report any acute episodes.\",\n  \"followUpDate\": \"2026-06-16\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -1108,7 +1108,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "appointments", "{{appointmentId}}", "notes"]
             },
-            "description": "Create or update (upsert) consultation notes. **Doctor role required.**\n\nThis endpoint is idempotent — calling it again updates the existing note."
+            "description": "**Required Role:** `DOCTOR` — Only the doctor assigned to this appointment can write notes.\n\n> Returns `403 Forbidden` for patients or for a doctor who is not assigned to this specific appointment.\n\n> ⚠️ Run **🔄 Activate Doctor Token** first if needed.\n\n---\n\nCreate or **update** (upsert) consultation notes. Calling this again on the same appointment will overwrite the existing note. All fields are optional.\n\n**Fields:**\n- `chiefComplaint` — patient's primary complaint, max 1000 chars\n- `diagnosis` — doctor's diagnosis, max 1000 chars\n- `notes` — free-text treatment plan, instructions, or remarks, max 3000 chars\n- `followUpDate` — optional follow-up date in **`YYYY-MM-DD`** format (e.g. `2026-06-16`) — not an ISO timestamp\n\n**Note:** This endpoint also triggers the appointment status → `completed` transition internally."
           },
           "response": []
         }
@@ -1116,10 +1116,10 @@
     },
     {
       "name": "💊 Prescriptions",
-      "description": "Prescriptions are scoped to an appointment.\n\n**Base path:** `/api/appointments/:appointmentId/prescriptions`\n\n**Auth:** Doctor can add/remove; both roles can read.",
+      "description": "Prescriptions are scoped to an appointment.\n\n**Base path:** `/api/appointments/:appointmentId/prescriptions`\n\n| Request | Role |\n|---|---|\n| Get Prescriptions | `ANY` (appointment parties only) |\n| Add Prescription | `DOCTOR` (assigned doctor only) |\n| Remove Prescription | `DOCTOR` (assigned doctor only) |",
       "item": [
         {
-          "name": "Get Prescriptions for Appointment",
+          "name": "[ANY] Get Prescriptions for Appointment",
           "event": [
             {
               "listen": "test",
@@ -1145,12 +1145,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "appointments", "{{appointmentId}}", "prescriptions"]
             },
-            "description": "List all prescriptions for a specific appointment.\n\n**Auto-captures:** `rxId` from first result."
+            "description": "**Required Role:** `ANY` — Any authenticated user who is a **party to the appointment** (the patient or the assigned doctor).\n\n> Returns `403 Forbidden` for unrelated users.\n\n---\n\nList all prescriptions written for a specific appointment. Patients use this to view their medication list post-consultation.\n\n**Auto-captures:** `rxId` from the first result."
           },
           "response": []
         },
         {
-          "name": "Add Prescription (Doctor)",
+          "name": "[DOCTOR] Add Prescription",
           "event": [
             {
               "listen": "test",
@@ -1182,12 +1182,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "appointments", "{{appointmentId}}", "prescriptions"]
             },
-            "description": "Add a prescription to an appointment. **Doctor role required.**\n\n**Auto-captures:** `rxId`"
+            "description": "**Required Role:** `DOCTOR` — Only the doctor assigned to this appointment can add prescriptions.\n\n> Returns `403 Forbidden` for patients or unassigned doctors.\n\n> ⚠️ Run **🔄 Activate Doctor Token** first if needed.\n\n---\n\nAdd a single medication to the appointment's prescription list. Multiple prescriptions can be added per appointment by calling this endpoint multiple times.\n\n**Fields:**\n- `medicationName` — required\n- `dosage` — required, e.g. `81mg`\n- `frequency` — required, e.g. `Once daily with meals`\n- `duration` — required, e.g. `90 days`\n- `instructions` — optional, special handling notes\n\n**Auto-captures:** `rxId`"
           },
           "response": []
         },
         {
-          "name": "Remove Prescription (Doctor)",
+          "name": "[DOCTOR] Remove Prescription",
           "event": [
             {
               "listen": "test",
@@ -1206,7 +1206,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "appointments", "{{appointmentId}}", "prescriptions", "{{rxId}}"]
             },
-            "description": "Remove a specific prescription. **Doctor role required.**\n\nUses `{{rxId}}` — auto-set by Add Prescription or Get Prescriptions."
+            "description": "**Required Role:** `DOCTOR` — Only the doctor assigned to this appointment can remove prescriptions.\n\n> Returns `403 Forbidden` for patients or unassigned doctors.\n\n> ⚠️ Run **🔄 Activate Doctor Token** first if needed.\n\n---\n\nRemove a specific prescription from the appointment.\n\nUses `{{rxId}}` — auto-set by **[DOCTOR] Add Prescription** or **[ANY] Get Prescriptions for Appointment**."
           },
           "response": []
         }
@@ -1214,10 +1214,10 @@
     },
     {
       "name": "🔔 Notifications",
-      "description": "In-app notifications (also pushed via Pusher). Notifications are created automatically on appointment events.\n\n**Auth:** Any authenticated user (own notifications only).",
+      "description": "In-app notifications (also delivered via Pusher real-time). Created automatically on appointment lifecycle events.\n\n| Request | Role |\n|---|---|\n| Get Notifications | `ANY` (own notifications only) |\n| Mark All as Read | `ANY` (own notifications only) |\n| Mark Single as Read | `ANY` (own notifications only) |",
       "item": [
         {
-          "name": "Get Notifications",
+          "name": "[ANY] Get Notifications",
           "event": [
             {
               "listen": "test",
@@ -1247,12 +1247,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "notifications"]
             },
-            "description": "Returns the current user's notifications with `unreadCount`.\n\n**Auto-captures:** `notificationId` from first result."
+            "description": "**Required Role:** `ANY` — Any authenticated user, but only **their own** notifications are returned.\n\n---\n\nReturns the current user's notifications list plus an `unreadCount` summary.\n\n**Response shape:**\n```json\n{\n  \"notifications\": [...],\n  \"unreadCount\": 3\n}\n```\n\n**Auto-captures:** `notificationId` from the first notification."
           },
           "response": []
         },
         {
-          "name": "Mark All as Read",
+          "name": "[ANY] Mark All Notifications as Read",
           "event": [
             {
               "listen": "test",
@@ -1271,12 +1271,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "notifications", "read-all"]
             },
-            "description": "Mark all of the current user's notifications as read in one call."
+            "description": "**Required Role:** `ANY` — Any authenticated user; marks **their own** unread notifications as read.\n\n---\n\nMark all of the current user's unread notifications as read in a single call. Resets `unreadCount` to `0`.\n\n> ⚠️ **Route ordering note (backend):** This route is registered before `/:id/read` to prevent Express from matching `read-all` as an ID param."
           },
           "response": []
         },
         {
-          "name": "Mark Single Notification as Read",
+          "name": "[ANY] Mark Single Notification as Read",
           "event": [
             {
               "listen": "test",
@@ -1295,7 +1295,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "notifications", "{{notificationId}}", "read"]
             },
-            "description": "Mark a single notification as read. Uses `{{notificationId}}` — auto-set by Get Notifications."
+            "description": "**Required Role:** `ANY` — Any authenticated user; marks **their own** notification as read.\n\n> Returns `403 Forbidden` if you try to mark another user's notification.\n\n---\n\nMark a single notification as read by ID.\n\nUses `{{notificationId}}` — auto-set by **[ANY] Get Notifications**."
           },
           "response": []
         }
@@ -1303,10 +1303,10 @@
     },
     {
       "name": "🤖 AI",
-      "description": "AI-powered doctor recommendations based on symptoms (Gemini).\n\n**Auth:** Patient role only.",
+      "description": "AI-powered doctor recommendations via Gemini.\n\n| Request | Role |\n|---|---|\n| Get Doctor Recommendations | `PATIENT` only |",
       "item": [
         {
-          "name": "Get Doctor Recommendations",
+          "name": "[PATIENT] Get Doctor Recommendations",
           "event": [
             {
               "listen": "test",
@@ -1324,7 +1324,7 @@
                   "if (recs?.length > 0 && recs[0].doctors?.length > 0) {",
                   "  const firstDoc = recs[0].doctors[0];",
                   "  pm.collectionVariables.set('doctorId', firstDoc.id);",
-                  "  console.log('📌 doctorId updated from recommendation:', firstDoc.id);",
+                  "  console.log('📌 doctorId updated from AI recommendation:', firstDoc.id);",
                   "}"
                 ]
               }
@@ -1345,7 +1345,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "ai", "recommend"]
             },
-            "description": "Sends symptoms to Gemini and returns matched specializations + available doctors.\n\n**Patient role only.**\n\n**Auto-captures:** `doctorId` from the first recommended doctor — ready for appointment booking."
+            "description": "**Required Role:** `PATIENT` — Only patients can request AI recommendations.\n\n> Returns `403 Forbidden` for doctors.\n\n> ⚠️ Run **🔄 Activate Patient Token** first if you've been testing as a doctor.\n\n---\n\nDescribe symptoms in plain text and receive matched specializations + available doctors in each specialization. Powered by the Gemini API.\n\n**Request:**\n```json\n{ \"symptoms\": \"string describing symptoms or health concerns\" }\n```\n\n**Response shape:**\n```json\n{\n  \"recommendations\": [\n    {\n      \"specialization\": \"Cardiologist\",\n      \"reason\": \"Based on chest pain and shortness of breath\",\n      \"doctors\": [ { \"id\": \"...\", \"name\": \"...\", \"specialization\": \"...\" } ]\n    }\n  ]\n}\n```\n\n**Auto-captures:** `doctorId` from the first recommended doctor — immediately ready for **[PATIENT] Create Appointment**."
           },
           "response": []
         }
