@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { db } from "../../config/db";
 import { authRepository } from "./auth.repository";
 import type { RegisterInput, LoginInput, JwtPayload } from "./auth.validators";
 import { env } from "../../config/env";
@@ -14,7 +15,7 @@ export const authService = {
   // Register
   // ---------------------------------------------------------------------------
   async register(input: RegisterInput) {
-    // 1. Check email uniqueness
+    // 1. Check email uniqueness (outside tx — read only)
     const existing = await authRepository.findByEmail(input.email);
     if (existing) {
       const error = new Error("Email is already in use") as Error & { statusCode: number };
@@ -22,22 +23,40 @@ export const authService = {
       throw error;
     }
 
-    // 2. Hash password
+    // 2. Hash password (outside tx — CPU work)
     const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
 
-    // 3. Create user
-    const user = await authRepository.createUser({
-      email: input.email,
-      passwordHash,
+    // 3. Atomic transaction: user + role + profile scaffold
+    const user = await db.transaction(async (tx) => {
+      const newUser = await authRepository.createUser({ email: input.email, passwordHash }, tx);
+
+      await authRepository.assignRole(newUser.id, input.role, tx);
+
+      if (input.role === "patient") {
+        await authRepository.createPatientProfile(
+          newUser.id,
+          { firstName: input.firstName, lastName: input.lastName },
+          tx,
+        );
+      } else {
+        await authRepository.createDoctorProfile(
+          newUser.id,
+          {
+            firstName: input.firstName,
+            lastName: input.lastName,
+            specialization: input.specialization!, // guaranteed by Zod superRefine
+          },
+          tx,
+        );
+      }
+
+      return newUser;
     });
 
-    // 4. Assign role
-    await authRepository.assignRole(user.id, input.role);
-
-    // 5. Fetch roles for token
+    // 4. Fetch roles for JWT (transaction committed, data is visible)
     const userRoles = await authRepository.getUserRoles(user.id);
 
-    // 6. Sign JWT
+    // 5. Sign JWT
     const token = signToken({ sub: user.id, email: user.email, roles: userRoles });
 
     return {

@@ -1,11 +1,15 @@
-import { eq, isNull } from "drizzle-orm";
-import { db } from "../../config/db";
+import { eq } from "drizzle-orm";
+import { db, type DrizzleTx } from "../../config/db";
 import { users } from "../users/users.schema";
 import { roles, userRoles } from "./auth.schema";
+import { patientProfiles } from "../patients/patients.schema";
+import { doctorProfiles } from "../doctors/doctors.schema";
 
 // NOTE: This file re-uses the DB table schema exported from users.schema.ts
 // and auth.schema.ts (the Drizzle table definitions, not the Zod schemas).
 // The Zod validation schemas live in auth.validators.ts to avoid name collision.
+
+type DbOrTx = typeof db | DrizzleTx;
 
 export const authRepository = {
   // ---------------------------------------------------------------------------
@@ -41,11 +45,11 @@ export const authRepository = {
   // ---------------------------------------------------------------------------
   // Create user
   // ---------------------------------------------------------------------------
-  async createUser(data: {
-    email: string;
-    passwordHash: string;
-  }) {
-    const result = await db
+  async createUser(
+    data: { email: string; passwordHash: string },
+    tx: DbOrTx = db,
+  ) {
+    const result = await tx
       .insert(users)
       .values(data)
       .returning();
@@ -56,7 +60,8 @@ export const authRepository = {
   // ---------------------------------------------------------------------------
   // Assign role to user
   // ---------------------------------------------------------------------------
-  async assignRole(userId: string, roleName: string) {
+  async assignRole(userId: string, roleName: string, tx: DbOrTx = db) {
+    // Role lookup is a read of seeded data — always use main db, not tx
     const roleResult = await db
       .select()
       .from(roles)
@@ -66,12 +71,43 @@ export const authRepository = {
     const role = roleResult[0];
     if (!role) throw new Error(`Role '${roleName}' not found`);
 
-    await db
+    await tx
       .insert(userRoles)
       .values({ userId, roleId: role.id })
       .onConflictDoNothing();
 
     return role;
+  },
+
+  // ---------------------------------------------------------------------------
+  // Create patient profile scaffold
+  // ---------------------------------------------------------------------------
+  async createPatientProfile(
+    userId: string,
+    data: { firstName: string; lastName: string },
+    tx: DbOrTx = db,
+  ) {
+    await tx.insert(patientProfiles).values({
+      userId,
+      firstName: data.firstName,
+      lastName: data.lastName,
+    });
+  },
+
+  // ---------------------------------------------------------------------------
+  // Create doctor profile scaffold
+  // ---------------------------------------------------------------------------
+  async createDoctorProfile(
+    userId: string,
+    data: { firstName: string; lastName: string; specialization: string },
+    tx: DbOrTx = db,
+  ) {
+    await tx.insert(doctorProfiles).values({
+      userId,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      specialization: data.specialization,
+    });
   },
 
   // ---------------------------------------------------------------------------

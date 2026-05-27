@@ -6,14 +6,19 @@
  *  - roles: patient, doctor
  *  - permissions: scoped action strings
  *  - role_permissions: maps permissions to roles
+ *  - users: 5 patients + 5 doctors (dev accounts)
+ *  - user_roles, patient_profiles, doctor_profiles
  *
- * Adding a new role in the future = INSERT INTO roles + role_permissions only.
- * Zero code changes required.
+ * All inserts are idempotent — safe to re-run.
  */
 
-import { db } from "../config/db";
-import { roles, permissions, rolePermissions } from "../modules/auth/auth.schema";
+import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
+import { db } from "../config/db";
+import { roles, permissions, rolePermissions, userRoles } from "../modules/auth/auth.schema";
+import { users } from "../modules/users/users.schema";
+import { patientProfiles } from "../modules/patients/patients.schema";
+import { doctorProfiles } from "../modules/doctors/doctors.schema";
 
 // ---------------------------------------------------------------------------
 // Permission definitions
@@ -84,6 +89,39 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
 };
 
 // ---------------------------------------------------------------------------
+// Seed users
+// Default password for all dev accounts: pass1234
+// ---------------------------------------------------------------------------
+const SEED_PASSWORD = "pass1234";
+
+const SEED_PATIENTS = [
+  { email: "jane.cooper@example.com",    firstName: "Jane",    lastName: "Cooper"    },
+  { email: "michael.torres@example.com", firstName: "Michael", lastName: "Torres"   },
+  { email: "emily.chen@example.com",     firstName: "Emily",   lastName: "Chen"     },
+  { email: "david.okafor@example.com",   firstName: "David",   lastName: "Okafor"   },
+  { email: "sarah.williams@example.com", firstName: "Sarah",   lastName: "Williams" },
+];
+
+const SEED_DOCTORS = [
+  { email: "robert.smith@example.com",  firstName: "Robert",  lastName: "Smith",   specialization: "Cardiology"    },
+  { email: "maria.santos@example.com",  firstName: "Maria",   lastName: "Santos",  specialization: "Dermatology"   },
+  { email: "james.lee@example.com",     firstName: "James",   lastName: "Lee",     specialization: "Neurology"     },
+  { email: "priya.patel@example.com",   firstName: "Priya",   lastName: "Patel",   specialization: "Pediatrics"    },
+  { email: "carlos.rivera@example.com", firstName: "Carlos",  lastName: "Rivera",  specialization: "Orthopedics"   },
+];
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Inserts a user if not present; returns the user row either way. */
+async function findOrCreateUser(email: string, passwordHash: string) {
+  await db.insert(users).values({ email, passwordHash }).onConflictDoNothing();
+  const [user] = await db.select().from(users).where(eq(users.email, email));
+  return user;
+}
+
+// ---------------------------------------------------------------------------
 // Seed runner
 // ---------------------------------------------------------------------------
 async function seed() {
@@ -140,6 +178,36 @@ async function seed() {
         .values({ roleId, permissionId })
         .onConflictDoNothing();
     }
+  }
+
+  // 5. Hash shared password once
+  console.log("  → Hashing seed password...");
+  const passwordHash = await bcrypt.hash(SEED_PASSWORD, 12);
+
+  // 6. Seed patients
+  console.log("  → Seeding 5 patients...");
+  const patientRoleId = roleMap["patient"];
+  for (const p of SEED_PATIENTS) {
+    const user = await findOrCreateUser(p.email, passwordHash);
+    await db.insert(userRoles).values({ userId: user.id, roleId: patientRoleId }).onConflictDoNothing();
+    await db
+      .insert(patientProfiles)
+      .values({ userId: user.id, firstName: p.firstName, lastName: p.lastName })
+      .onConflictDoNothing();
+    console.log(`     ✓ patient ${p.email}`);
+  }
+
+  // 7. Seed doctors
+  console.log("  → Seeding 5 doctors...");
+  const doctorRoleId = roleMap["doctor"];
+  for (const d of SEED_DOCTORS) {
+    const user = await findOrCreateUser(d.email, passwordHash);
+    await db.insert(userRoles).values({ userId: user.id, roleId: doctorRoleId }).onConflictDoNothing();
+    await db
+      .insert(doctorProfiles)
+      .values({ userId: user.id, firstName: d.firstName, lastName: d.lastName, specialization: d.specialization })
+      .onConflictDoNothing();
+    console.log(`     ✓ doctor  ${d.email}`);
   }
 
   console.log("✅ Seed complete.");
