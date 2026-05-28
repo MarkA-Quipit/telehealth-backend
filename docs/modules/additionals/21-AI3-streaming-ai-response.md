@@ -32,8 +32,10 @@ The current AI symptom checker waits for the full Groq response before rendering
 
 | File | Change |
 |------|--------|
-| `src/modules/ai/ai.service.ts` | Add `streamRecommendations(symptoms, res)` method using Groq streaming API |
-| `src/modules/ai/ai.controller.ts` | Add new `POST /api/ai/recommend/stream` route (or replace existing) that sets SSE headers and delegates to service |
+| `src/modules/ai/ai.service.ts` | Add `streamRecommendations(symptoms, userId)` method — returns an `AsyncGenerator`; never touches `res` |
+| `src/modules/ai/ai.controller.ts` | Add new `POST /api/ai/recommend/stream` route — owns all SSE headers and iterates the generator |
+
+> **Architecture rule (CLAUDE.md):** Services must never call `res` — "never call `res` inside a service." The controller owns the HTTP response. The service returns an `AsyncGenerator` that yields typed chunks; the controller writes them to `res`. This also ensures errors thrown before or during streaming are catchable at the controller level.
 
 ### SSE Response Format
 
@@ -46,19 +48,21 @@ data: {"token": "Based on your symptoms..."}\n\n
 Final event when stream is complete:
 
 ```
-data: [DONE]\n\n
+data: {"done": true, "recommendations": [...]}\n\n
 ```
 
 ### Service Change
 
-```ts
-async streamRecommendations(symptoms: string, res: Response) {
-  res.setHeader('Content-Type', 'text/event-stream')
-  res.setHeader('Cache-Control', 'no-cache')
-  res.setHeader('Connection', 'keep-alive')
+The service returns an `AsyncGenerator` — it never receives or calls `res`:
 
+```ts
+type StreamChunk =
+  | { type: 'token'; token: string }
+  | { type: 'done'; recommendations: RecommendationResult[] }
+
+async *streamRecommendations(symptoms: string, userId: string): AsyncGenerator<StreamChunk> {
   const stream = await groq.chat.completions.create({
-    model: 'llama-3.3-70b-versatile', // or whichever model is currently used
+    model: 'llama-3.3-70b-versatile',
     messages: [/* existing prompt template */],
     stream: true,
   })
@@ -68,16 +72,51 @@ async streamRecommendations(symptoms: string, res: Response) {
     const token = chunk.choices[0]?.delta?.content ?? ''
     if (token) {
       fullText += token
-      res.write(`data: ${JSON.stringify({ token })}\n\n`)
+      yield { type: 'token', token }
     }
   }
 
-  // After stream ends: parse full text, fetch matched doctors, send final structured data
-  const recommendations = parseRecommendations(fullText) // existing parser
-  res.write(`data: ${JSON.stringify({ done: true, recommendations })}\n\n`)
-  res.end()
+  const recommendations = parseRecommendations(fullText)
+
+  // AI1 integration: log the completed recommendation to ai_recommendation_logs
+  // If AI1 is implemented, insert here (same pattern as the non-streaming endpoint)
+  await db.insert(aiRecommendationLogs).values({
+    userId,
+    symptoms,
+    recommendations: JSON.stringify(recommendations),
+  })
+
+  yield { type: 'done', recommendations }
 }
 ```
+
+### Controller Change
+
+The controller owns all SSE headers and the `res.write` / `res.end` calls:
+
+```ts
+router.post('/recommend/stream', authenticate, requireRole('patient'), async (req: AuthRequest, res: Response) => {
+  const { symptoms } = recommendSchema.parse(req.body)
+
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+
+  try {
+    for await (const chunk of aiService.streamRecommendations(symptoms, req.user!.id)) {
+      if (chunk.type === 'token') {
+        res.write(`data: ${JSON.stringify({ token: chunk.token })}\n\n`)
+      } else {
+        res.write(`data: ${JSON.stringify({ done: true, recommendations: chunk.recommendations })}\n\n`)
+      }
+    }
+  } finally {
+    res.end()
+  }
+})
+```
+
+> The `try/finally` ensures `res.end()` is always called even if Groq throws mid-stream, preventing the client connection from hanging open.
 
 ### New Endpoints
 
@@ -142,12 +181,13 @@ async function streamRecommendations(
 
 ## Implementation Steps
 
-1. (BE) Add `streamRecommendations(symptoms, res)` to `ai.service.ts` using the Groq streaming API and the existing prompt template.
-2. (BE) Register `POST /api/ai/recommend/stream` in `ai.controller.ts` with SSE headers; call `aiService.streamRecommendations`.
-3. (FE) Add `streamRecommendations` streaming function to `ai.api.ts`.
-4. (FE) In `SymptomChecker.tsx`, add `streamingText` and `isStreaming` state.
-5. (FE) Replace the standard `useQuery`/`useMutation` call with the streaming function on form submit.
-6. (FE) Render `streamingText` in a typing-effect box while `isStreaming` is true; render structured results when done.
+1. (BE) Add `streamRecommendations(symptoms, userId)` as an `AsyncGenerator` method in `ai.service.ts` — yields `{ type: 'token', token }` chunks then a final `{ type: 'done', recommendations }` chunk. Never accept or call `res`.
+2. (BE) If AI1 is already implemented, insert the `ai_recommendation_logs` row inside `streamRecommendations` after the generator finishes accumulating `fullText` (before the final `yield`).
+3. (BE) Register `POST /recommend/stream` in `ai.controller.ts`: set SSE headers, iterate the generator with `for await`, write each chunk, and wrap in `try/finally { res.end() }`.
+4. (FE) Add `streamRecommendations` streaming function to `ai.api.ts`.
+5. (FE) In `SymptomChecker.tsx`, add `streamingText` and `isStreaming` state.
+6. (FE) Replace the standard `useQuery`/`useMutation` call with the streaming function on form submit.
+7. (FE) Render `streamingText` in a typing-effect box while `isStreaming` is true; render structured results when done.
 
 ---
 

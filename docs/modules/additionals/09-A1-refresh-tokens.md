@@ -62,6 +62,8 @@ Migration required: yes.
 | POST | `/api/auth/refresh` | none (uses refresh token in body) | Exchange refresh token for new access token |
 | POST | `/api/auth/logout` | `authenticate` | Revoke current refresh token |
 
+> **Route conflict check:** Before adding `POST /logout`, verify whether a logout route already exists in `auth.controller.ts` from the MVP implementation. If it does, extend it to also revoke the refresh token rather than registering a second handler for the same path.
+
 ### Service / Repository Methods
 
 - `authRepository.storeRefreshToken(userId, tokenHash, expiresAt)` — insert into `refresh_tokens`
@@ -70,15 +72,15 @@ Migration required: yes.
 - `authService.login(email, password)`:
   1. Existing validation (unchanged)
   2. Sign access token with `expiresIn: '15m'`
-  3. Generate random refresh token (`crypto.randomUUID()` or `crypto.randomBytes(32).toString('hex')`)
-  4. Hash the refresh token with `bcrypt.hash`
+  3. Generate random refresh token (`crypto.randomBytes(32).toString('hex')`)
+  4. Hash the refresh token with `crypto.createHash('sha256').update(token).digest('hex')` — do NOT use bcrypt here; refresh tokens are already high-entropy random strings and bcrypt's intentional slowness adds unnecessary latency on every login and refresh
   5. Store hash in DB; return `{ accessToken, refreshToken }` to client
 - `authService.refresh(rawRefreshToken)`:
-  1. Hash the incoming token
+  1. Hash the incoming token with SHA-256 (same as above)
   2. Look up in DB — throw 401 if not found, revoked, or expired
   3. Sign and return a new access token (15 min)
 - `authService.logout(userId, rawRefreshToken)`:
-  1. Hash token, find in DB
+  1. Hash token with SHA-256, find in DB
   2. Call `revokeRefreshToken`
 
 ---

@@ -58,9 +58,13 @@ Migration required: yes.
 
 - `appointmentsRepository.markJoined(appointmentId, role, timestamp)`:
   ```ts
-  const field = role === 'patient' ? 'patientJoinedAt' : 'doctorJoinedAt'
-  db.update(appointments).set({ [field]: timestamp }).where(eq(appointments.id, appointmentId))
+  if (role === 'patient') {
+    return db.update(appointments).set({ patientJoinedAt: timestamp }).where(eq(appointments.id, appointmentId))
+  } else {
+    return db.update(appointments).set({ doctorJoinedAt: timestamp }).where(eq(appointments.id, appointmentId))
+  }
   ```
+  > Do NOT use a computed property key `{ [field]: timestamp }` — Drizzle's `.set()` is fully typed and a computed string key fails TypeScript strict mode compilation.
 - `appointmentsService.joinConsultation(appointmentId, userId, role)`:
   1. Fetch appointment — throw 404 if not found
   2. Verify caller is patient or doctor on this appointment — throw 403 otherwise

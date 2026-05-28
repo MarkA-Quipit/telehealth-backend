@@ -79,9 +79,11 @@ Patients and doctors should be able to add confirmed appointments to their nativ
 
 ### New Hooks / API Functions
 
-- No new hook needed — use an `<a>` tag pointing to the API URL with the JWT in a query param, or trigger a `blob` download via `api.get` on click.
+- No new hook needed — trigger a blob download via `api.get` on click (the Axios instance already attaches the `Authorization` header).
 
-**Recommended approach (blob download):**
+> **Do not** pass the JWT as a query param (`?token=...`). Query strings are recorded in server access logs, browser history, and HTTP referrer headers — this exposes the token. Always use the blob download approach below.
+
+**Required approach (blob download):**
 ```ts
 const handleCalendarDownload = async () => {
   const res = await api.get(`/appointments/${id}/calendar`, { responseType: 'blob' })

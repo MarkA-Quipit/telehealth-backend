@@ -51,12 +51,13 @@ Users currently have no way to change their password after registration. This ad
 ### Service / Repository Methods
 
 - `usersRepository.updatePasswordHash(userId, hash)` — `db.update(users).set({ passwordHash: hash }).where(eq(users.id, userId))`
-- `usersService.changePassword(userId, currentPassword, newPassword)`:
-  1. Fetch user by `userId` (throw 404 if not found)
-  2. Verify `bcrypt.compare(currentPassword, user.passwordHash)` — throw 400 `"Current password is incorrect"` if false
-  3. Validate `newPassword` (min 8 chars)
-  4. Hash with `bcrypt.hash(newPassword, 10)`
-  5. Call `updatePasswordHash`
+- `usersService.changePassword(requesterId, userId, currentPassword, newPassword)`:
+  1. Verify `requesterId === userId` — throw `AppError('Forbidden', 403)` if not (prevents changing another user's password)
+  2. Fetch user by `userId` (throw 404 if not found)
+  3. Verify `bcrypt.compare(currentPassword, user.passwordHash)` — throw `AppError('Current password is incorrect', 400)` if false
+  4. Validate `newPassword !== currentPassword` — throw `AppError('New password must be different from current password', 400)` if equal
+  5. Hash with `bcrypt.hash(newPassword, 10)`
+  6. Call `updatePasswordHash`
 
 ### Zod Schema
 
@@ -93,7 +94,7 @@ export type ChangePasswordInput = z.infer<typeof changePasswordSchema>
 1. (BE) Add `changePasswordSchema` to `users.schema.ts`.
 2. (BE) Add `updatePasswordHash` to `users.repository.ts`.
 3. (BE) Add `changePassword` to `users.service.ts` with bcrypt verify + hash + update.
-4. (BE) Register `POST /:id/change-password` in `users.controller.ts` (authenticate, parse with `changePasswordSchema`, call service).
+4. (BE) Register `POST /:id/change-password` in `users.controller.ts` (authenticate, parse with `changePasswordSchema`, call `usersService.changePassword(req.user!.id, req.params.id, body.currentPassword, body.newPassword)`).
 5. (FE) Add `changePassword` to `users.api.ts`.
 6. (FE) Add `useChangePassword` hook to `useUsers.ts`.
 7. (FE) In `PatientProfilePage.tsx`, add a "Change Password" section with `Current Password` and `New Password` inputs (type="password") and a Save button.

@@ -42,17 +42,23 @@ The notifications endpoint currently loads the latest 50 items. As users accumul
 
 ### Repository Change
 
+> **N2 integration:** N2 updated `findAllForUser` to accept an optional `type` param. This task extends that same signature — do NOT write a new overload. The final merged signature must handle both the `type` filter (from N2) and pagination (from N3) together.
+
 ```ts
 async findAllForUser(userId: string, type?: string, page = 1, limit = 20) {
   const offset = (page - 1) * limit
+  const conditions = type
+    ? and(eq(notifications.userId, userId), eq(notifications.type, type))
+    : eq(notifications.userId, userId)
+
   const [items, [{ count }]] = await Promise.all([
     db.select().from(notifications)
-      .where(/* existing conditions */)
+      .where(conditions)
       .orderBy(desc(notifications.createdAt))
       .limit(limit)
       .offset(offset),
     db.select({ count: sql<number>`COUNT(*)` }).from(notifications)
-      .where(/* same conditions */)
+      .where(conditions)
   ])
   return { items, total: Number(count) }
 }
