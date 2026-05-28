@@ -1,4 +1,4 @@
-import { geminiModel } from "../../config/gemini";
+import { groqClient, GROQ_MODEL } from "../../config/groq";
 import { doctorsRepository } from "../doctors/doctors.repository";
 import type { DoctorWithUser } from "../doctors/doctors.repository";
 
@@ -54,8 +54,8 @@ Rules:
 // ---------------------------------------------------------------------------
 // Response parser — falls back to first available specialization
 // ---------------------------------------------------------------------------
-function parseAIResponse(text: string, specializations: string[]): ParsedAIResponse {
-  const fallbackSpecialization = specializations[0] ?? "General Practice";
+function parseAIResponse(text: string): ParsedAIResponse {
+  const fallbackSpecialization = "General Practitioner";
   try {
     const clean = text.replace(/```json|```/g, "").trim();
     return JSON.parse(clean) as ParsedAIResponse;
@@ -82,18 +82,22 @@ export const aiService = {
     // 2. Build prompt with the specialization list injected
     const prompt = buildRecommendationPrompt(symptoms, specializations);
 
-    // 3. Call Gemini API (fall back gracefully if the API errors)
+    // 3. Call Groq API (fall back gracefully if the API errors)
     let text: string;
     try {
-      const result = await geminiModel.generateContent(prompt);
-      text = result.response.text();
+      const completion = await groqClient.chat.completions.create({
+        messages: [{ role: "user", content: prompt }],
+        model: GROQ_MODEL,
+        response_format: { type: "json_object" },
+      });
+      text = completion.choices[0].message.content ?? "";
     } catch (err) {
-      console.error("[AI] Gemini API error:", (err as Error).message);
+      console.error("[AI] Groq API error:", (err as Error).message);
       text = "";
     }
 
     // 4. Parse structured JSON from response
-    const parsed = parseAIResponse(text, specializations);
+    const parsed = parseAIResponse(text);
 
     // 5. For each recommended specialization, fetch matching doctors (up to 3)
     const enriched = await Promise.all(

@@ -38,7 +38,6 @@
     "seed:prescriptions": "tsx src/db/seeds/10-prescriptions.ts"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
     "@neondatabase/serverless": "^1.1.0",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.10.0",
@@ -46,6 +45,7 @@
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
+    "groq-sdk": "^1.2.1",
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
