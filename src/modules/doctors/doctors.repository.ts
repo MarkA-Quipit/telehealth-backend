@@ -146,6 +146,10 @@ export interface Review {
 export interface DoctorFilters {
   specialization?: string;
   search?: string;
+  minFee?: number;
+  maxFee?: number;
+  minExperience?: number;
+  minRating?: number;
   page: number;
   limit: number;
 }
@@ -239,7 +243,7 @@ async function fetchDoctorStats(doctorIds: string[]): Promise<Map<string, Doctor
 export const doctorsRepository = {
   // ── findAll — paginated list with optional filters ────────────────────────
   async findAll(filters: DoctorFilters): Promise<{ items: DoctorWithUser[]; total: number }> {
-    const { specialization, search, page, limit } = filters;
+    const { specialization, search, minFee, maxFee, minExperience, minRating, page, limit } = filters;
     const offset = (page - 1) * limit;
 
     // Build where conditions
@@ -256,8 +260,41 @@ export const doctorsRepository = {
         ),
       );
     }
+    if (minFee != null) {
+      conditions.push(gte(doctorProfiles.consultationFee, String(minFee)));
+    }
+    if (maxFee != null) {
+      conditions.push(lte(doctorProfiles.consultationFee, String(maxFee)));
+    }
+    if (minExperience != null) {
+      conditions.push(gte(doctorProfiles.yearsOfExperience, minExperience));
+    }
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    // When filtering by minRating, fetch all matching rows, merge stats, filter, paginate in memory
+    if (minRating != null) {
+      const allRows = await db
+        .select()
+        .from(doctorProfiles)
+        .innerJoin(users, eq(doctorProfiles.userId, users.id))
+        .where(where)
+        .orderBy(doctorProfiles.lastName, doctorProfiles.firstName);
+
+      const allIds = allRows.map((r) => r.doctor_profiles.id);
+      const statsMap = await fetchDoctorStats(allIds);
+      const allItems = allRows.map((r) =>
+        mapRow(r.doctor_profiles, r.users, statsMap.get(r.doctor_profiles.id)),
+      );
+      const filtered = allItems.filter(
+        (d) => d.averageRating != null && d.averageRating >= minRating,
+      );
+
+      return {
+        items: filtered.slice(offset, offset + limit),
+        total: filtered.length,
+      };
+    }
 
     const [rows, countRows] = await Promise.all([
       db

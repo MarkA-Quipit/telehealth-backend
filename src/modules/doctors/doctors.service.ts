@@ -13,6 +13,10 @@ export const doctorsService = {
   async listDoctors(filters: {
     specialization?: string;
     search?: string;
+    minFee?: number;
+    maxFee?: number;
+    minExperience?: number;
+    minRating?: number;
     page?: number;
     limit?: number;
   }) {
@@ -22,6 +26,10 @@ export const doctorsService = {
     const { items, total } = await doctorsRepository.findAll({
       specialization: filters.specialization,
       search: filters.search,
+      minFee: filters.minFee,
+      maxFee: filters.maxFee,
+      minExperience: filters.minExperience,
+      minRating: filters.minRating,
       page,
       limit,
     });

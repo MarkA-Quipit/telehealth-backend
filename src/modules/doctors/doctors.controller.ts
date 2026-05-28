@@ -19,8 +19,21 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
   const search = typeof req.query.search === "string"
     ? req.query.search
     : undefined;
+  const minFee = req.query.minFee ? Number(req.query.minFee) : undefined;
+  const maxFee = req.query.maxFee ? Number(req.query.maxFee) : undefined;
+  const minExperience = req.query.minExperience ? Number(req.query.minExperience) : undefined;
+  const minRating = req.query.minRating ? Number(req.query.minRating) : undefined;
 
-  const result = await doctorsService.listDoctors({ specialization, search, page, limit });
+  const result = await doctorsService.listDoctors({
+    specialization,
+    search,
+    minFee,
+    maxFee,
+    minExperience,
+    minRating,
+    page,
+    limit,
+  });
   res.status(200).json({ success: true, message: "Doctors retrieved", data: result });
 });
 
