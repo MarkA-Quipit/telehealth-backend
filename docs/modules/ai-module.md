@@ -66,17 +66,25 @@ getRecommendations(symptoms: string): Promise<RecommendationResult>
 
 ```ts
 async getRecommendations(symptoms: string): Promise<RecommendationResult> {
-  // 1. Build prompt
-  const prompt = buildRecommendationPrompt(symptoms)
+  // 1. Fetch all specializations currently in DB — constrains Gemini to only pick real values
+  const availableSpecializations = await doctorsRepository.getDistinctSpecializations()
 
-  // 2. Call Gemini API
-  const result = await geminiModel.generateContent(prompt)
-  const text = result.response.text()
+  // 2. Build prompt with the live specialization list injected
+  const prompt = buildRecommendationPrompt(symptoms, availableSpecializations)
 
-  // 3. Parse structured JSON from response
-  const parsed = parseAIResponse(text)
+  // 3. Call Gemini API
+  let text: string
+  try {
+    const result = await geminiModel.generateContent(prompt)
+    text = result.response.text()
+  } catch {
+    text = ''
+  }
 
-  // 4. For each recommended specialization, fetch matching doctors from DB
+  // 4. Parse structured JSON from response
+  const parsed = parseAIResponse(text, availableSpecializations)
+
+  // 5. For each recommended specialization, fetch matching doctors from DB
   const enriched = await Promise.all(
     parsed.recommendations.map(async (rec) => {
       const { items } = await doctorsRepository.findAll({
@@ -94,11 +102,22 @@ async getRecommendations(symptoms: string): Promise<RecommendationResult> {
 
 **Prompt template:**
 
+The specialization list from DB is injected so Gemini can only return values that actually exist. This eliminates the silent zero-result problem caused by name mismatches (e.g. Gemini returning "Cardiology" when the DB has "Cardiologist"). The list is fetched fresh per request, so newly added specializations are automatically available.
+
 ```ts
-const buildRecommendationPrompt = (symptoms: string) => `
-You are a medical triage assistant helping patients find the right doctor specialization.
+const buildRecommendationPrompt = (symptoms: string, specializations: string[]) => {
+  const list = specializations.length > 0
+    ? specializations.map(s => `"${s}"`).join(', ')
+    : '"General Practice"'
+
+  return `You are a medical triage assistant helping patients find the right doctor specialization.
 
 Patient describes: "${symptoms}"
+
+Available specializations in our system:
+${list}
+
+You MUST only recommend specializations from the list above. Do not invent or use specialization names not in this list.
 
 Respond ONLY with a JSON object (no markdown, no explanation) in this exact format:
 {
@@ -112,25 +131,31 @@ Respond ONLY with a JSON object (no markdown, no explanation) in this exact form
 
 Rules:
 - Return 1 to 3 specializations maximum
-- Specialization names must be standard medical specializations (e.g., "Cardiology", "Dermatology", "General Practice")
+- You MUST pick ONLY from the available specializations list above — exact match required
 - Keep reasons under 20 words
-- If symptoms are unclear, recommend "General Practice"
+- If no specialization closely fits, pick the closest one from the list
 - Never provide diagnosis or medical advice
 - Respond only with the JSON object, nothing else
 `
+}
 ```
 
 **Response parser:**
 
+The fallback now uses the first specialization from the DB list (or `"General Practice"` if the list is empty) rather than hardcoding the string, so the fallback also returns a valid DB value.
+
 ```ts
-const parseAIResponse = (text: string): { recommendations: Array<{ specialization: string; reason: string }> } => {
+const parseAIResponse = (
+  text: string,
+  availableSpecializations: string[]
+): { recommendations: Array<{ specialization: string; reason: string }> } => {
+  const fallbackSpecialization = availableSpecializations[0] ?? 'General Practice'
   try {
     const clean = text.replace(/```json|```/g, '').trim()
     return JSON.parse(clean)
   } catch {
-    // Fallback if AI response is malformed
     return {
-      recommendations: [{ specialization: 'General Practice', reason: 'Unable to parse symptoms — general practitioner recommended' }]
+      recommendations: [{ specialization: fallbackSpecialization, reason: 'Unable to parse symptoms — general practitioner recommended' }]
     }
   }
 }
@@ -337,7 +362,7 @@ POST /api/ai/recommend
 
 ## 10. Dependencies
 
-- Depends on: auth module, doctors module (repository reuse for specialization lookup)
+- Depends on: auth module, doctors module (`doctorsRepository.getDistinctSpecializations()` + `findAll()`)
 - Required by: nothing downstream
 - External: `@google/generative-ai` npm package, `GEMINI_API_KEY` env var
 
@@ -345,18 +370,21 @@ POST /api/ai/recommend
 
 | Scenario | Behavior |
 |---|---|
-| Gemini API down / timeout | Return fallback: `[{ specialization: 'General Practice', reason: '...' }]` |
-| Malformed AI JSON response | parseAIResponse fallback returns General Practice |
+| Gemini API down / timeout | `text = ''` → `parseAIResponse` fallback returns first DB specialization |
+| Malformed AI JSON response | `parseAIResponse` catch block returns first DB specialization |
 | No doctors found for specialization | Return empty `doctors: []` — frontend shows "No doctors available for this specialization" |
+| No specializations in DB yet | Prompt uses `"General Practice"` as the only option; fallback also uses it |
 | symptoms too short | Zod 400 error before API call |
 
 ---
 
 ## 11. Completion Criteria
 
+- [ ] `POST /api/ai/recommend` fetches live specialization list from DB before calling Gemini
+- [ ] Gemini prompt includes the live specialization list and instructs exact-match selection
 - [ ] `POST /api/ai/recommend` calls Gemini, parses response, returns enriched recommendations
-- [ ] Malformed AI response falls back gracefully (no 500)
-- [ ] Recommendations include matching doctors from DB
+- [ ] Malformed AI response falls back gracefully (no 500) using first DB specialization
+- [ ] Recommendations include matching doctors from DB (match rate near 100% since Gemini picks from DB list)
 - [ ] Frontend SymptomChecker submits and renders results
 - [ ] Each recommended doctor links to their profile page
 - [ ] Loading state during API call

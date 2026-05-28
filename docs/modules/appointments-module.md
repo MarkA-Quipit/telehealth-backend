@@ -12,6 +12,7 @@ Core booking system. Manages the full lifecycle of an appointment: creation, con
 - Get appointment detail
 - List appointments (role-filtered: patient sees own, doctor sees own)
 - Cancel appointment (patient or doctor, with reason)
+- Reschedule appointment (patient: cancel + rebook flow — see AppointmentDetailPage)
 - Update appointment status (doctor: pending → confirmed → completed)
 - Conflict detection before booking (no double-booking)
 - Appointment serves as the Jitsi room anchor (appointmentId = roomName)
@@ -20,7 +21,6 @@ Core booking system. Manages the full lifecycle of an appointment: creation, con
 
 ## 3. Out-of-Scope Features
 
-- Rescheduling (cancel + rebook is sufficient for MVP)
 - Recurring appointments
 - Group appointments
 - Waitlist
@@ -162,6 +162,7 @@ src/features/appointments/
 │   └── appointments.api.ts
 ├── components/
 │   ├── AppointmentCard.tsx
+│   ├── AppointmentDataTable.tsx
 │   ├── AppointmentStatusBadge.tsx
 │   └── AppointmentTimeline.tsx
 ├── hooks/
@@ -179,11 +180,26 @@ src/features/appointments/
 
 ### AppointmentCard.tsx
 
-Compact row/card display:
+Compact row/card display (used on the **patient** side only):
 - Date + time (local timezone, formatted)
-- Doctor or patient name (context-aware)
+- Doctor name
 - Status badge
 - Quick actions: "View Details" button
+
+### AppointmentDataTable.tsx
+
+Shadcn `DataTable` used on the **doctor** appointments list (`/doctor/appointments`):
+
+| Column | Content | Sortable |
+| --- | --- | --- |
+| Patient | Patient full name | Yes |
+| Date | Formatted appointment date | Yes |
+| Time | Appointment time (local timezone) | Yes |
+| Status | `AppointmentStatusBadge` inline | Yes |
+| Actions | "View Details" button; column is extensible for future quick actions (e.g., confirm, cancel) | No |
+
+- Column headers are clickable to sort ascending/descending
+- Tab filter (All / Pending / Confirmed / Completed / Cancelled) sits above the table to narrow rows before sorting
 
 ### AppointmentStatusBadge.tsx
 
@@ -208,10 +224,20 @@ Flow:
 
 ### AppointmentListPage.tsx (patient)
 
-- Tabs: "Upcoming" / "Past"
-- Upcoming: pending + confirmed, sorted ascending by scheduledAt
-- Past: completed + cancelled, sorted descending
-- Per row: AppointmentCard
+Shadcn `DataTable` — same pattern as the doctor appointments list.
+
+| Column | Content | Sortable |
+| --- | --- | --- |
+| Doctor | Doctor full name + specialization | Yes |
+| Date | Formatted appointment date | Yes |
+| Time | Appointment time (local timezone) | Yes |
+| Status | `AppointmentStatusBadge` inline | Yes |
+| Actions | "View Details" button | No |
+
+- Tabs: "Upcoming" / "Past" sit above the table as the primary filter
+  - Upcoming: pending + confirmed, sorted ascending by scheduledAt
+  - Past: completed + cancelled, sorted descending
+- `AppointmentCard.tsx` is no longer used on this page
 - Empty state per tab
 
 ### AppointmentDetailPage.tsx (patient)
@@ -230,13 +256,30 @@ Flow:
   Reason for visit
   Duration
 
-[Cancel Appointment]
+[Reschedule & Cancel Actions]
   Only if status === 'pending' or 'confirmed'
-  Dialog: cancellation reason input → confirm
+
+  [Reschedule button]
+    Opens confirmation dialog:
+      "Rescheduling will cancel this appointment and take you to book a new time with the same doctor."
+    On confirm:
+      → cancels appointment (cancellationReason: "Rescheduled by patient")
+      → navigates to /patient/appointments/book?doctorId=<doctorId>
+    No new backend endpoint needed — reuses DELETE /api/appointments/:id
+
+  [Cancel button]
+    Opens cancel dialog: optional cancellation reason textarea → confirm
 
 [Medical Records (if completed)]
   Consultation notes (read-only)
   Prescriptions list (read-only)
+
+[Leave a Review (if completed AND no review submitted yet)]
+  Star selector (1–5 clickable stars)
+  Comment textarea (optional, max 1000 chars)
+  "Submit Review" button → POST /api/doctors/:doctorId/reviews
+  On success: section replaces with read-only display of submitted review
+  On duplicate (409): section shows "You've already reviewed this consultation"
 ```
 
 ### DoctorAppointmentListPage.tsx (doctor)
@@ -353,8 +396,9 @@ DELETE /api/appointments/:id
 - [ ] `GET /api/appointments` returns correct appointments filtered by role
 - [ ] `PATCH /api/appointments/:id/status` enforces valid transitions only
 - [ ] `DELETE /api/appointments/:id` records cancellation by, sends notification to other party
-- [ ] Patient appointment list shows tabs with correct filtering
+- [ ] Patient appointment list shows DataTable with sortable columns and Upcoming/Past tabs
 - [ ] Patient appointment detail shows Join button only when confirmed + within 15-min window
+- [ ] Patient appointment detail shows "Leave a Review" section for completed appointments with no existing review
 - [ ] Doctor appointment detail shows correct action buttons per status
 - [ ] Doctor can write notes and prescriptions from detail page
 - [ ] Cancel dialog requires no confirmation text (reason optional)

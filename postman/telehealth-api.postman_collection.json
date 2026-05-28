@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "4f8a2c1b-9d3e-4a7f-b5c2-8e1d6f0a3b9c",
     "name": "Telehealth API",
-    "description": "# Telehealth API — Modular Postman Collection\n\n## Role Badge Legend\n\nEvery request name is prefixed with a role badge so you know at a glance who can call it:\n\n| Badge | Meaning |\n|---|---|\n| `[PUBLIC]` | No authentication required |\n| `[ANY]` | Any authenticated user (patient **or** doctor) |\n| `[OWN]` | Any authenticated user — but only their **own** resource |\n| `[PATIENT]` | Patient role only (`patientToken`) |\n| `[DOCTOR]` | Doctor role only (`doctorToken`) |\n\n## How Credentials Flow\n\n1. **Login as Patient** or **Login as Doctor** — the test script auto-captures the JWT and sets `currentToken` + the role-specific token variable.\n2. All requests inherit the collection-level `Bearer {{currentToken}}` auth — no manual header copying needed.\n3. Use **🔄 Activate Patient Token** or **🔄 Activate Doctor Token** (in the Auth folder) to switch the active role mid-session without re-logging in.\n\n## Collection Variables\n\n| Variable | Description |\n|---|---|\n| `baseUrl` | API base URL (default: `http://localhost:3000`) |\n| `currentToken` | Active JWT — auto-set by login requests |\n| `patientToken` | JWT captured from patient login |\n| `doctorToken` | JWT captured from doctor login |\n| `userId` | Auto-set after login / register |\n| `patientId` | Auto-set after patient login |\n| `doctorId` | Auto-set after doctor login |\n| `appointmentId` | Set after creating an appointment |\n| `notificationId` | Set from notification list |\n| `rxId` | Set after adding a prescription |\n| `blockedSlotId` | Set after blocking a doctor slot |\n\n## Seeded Demo Credentials\n\n| Role | Email | Password |\n|---|---|---|\n| Doctor | `doctor1@demo.com` | `password123` |\n| Doctor | `doctor2@demo.com` | `password123` |\n| Patient | `patient1@demo.com` | `password123` |",
+    "description": "# Telehealth API — Modular Postman Collection\n\n## Role Badge Legend\n\nEvery request name is prefixed with a role badge so you know at a glance who can call it:\n\n| Badge | Meaning |\n|---|---|\n| `[PUBLIC]` | No authentication required |\n| `[ANY]` | Any authenticated user (patient **or** doctor) |\n| `[OWN]` | Any authenticated user — but only their **own** resource |\n| `[PATIENT]` | Patient role only (`patientToken`) |\n| `[DOCTOR]` | Doctor role only (`doctorToken`) |\n\n## How Credentials Flow\n\n1. **Login as Patient** or **Login as Doctor** — the test script auto-captures the JWT and sets `currentToken` + the role-specific token variable.\n2. All requests inherit the collection-level `Bearer {{currentToken}}` auth — no manual header copying needed.\n3. Use **🔄 Activate Patient Token** or **🔄 Activate Doctor Token** (in the Auth folder) to switch the active role mid-session without re-logging in.\n\n## Collection Variables\n\n| Variable | Description |\n|---|---|\n| `baseUrl` | API base URL (default: `http://localhost:3000`) |\n| `currentToken` | Active JWT — auto-set by login requests |\n| `patientToken` | JWT captured from patient login |\n| `doctorToken` | JWT captured from doctor login |\n| `userId` | Auto-set after login / register |\n| `patientId` | Auto-set after patient login |\n| `doctorId` | Auto-set after doctor login |\n| `appointmentId` | Set after creating an appointment |\n| `notificationId` | Set from notification list |\n| `rxId` | Set after adding a prescription |\n| `blockedSlotId` | Set after blocking a doctor slot |\n| `reviewId` | Set after submitting a doctor review |\n\n## Seeded Demo Credentials\n\n| Role | Email | Password |\n|---|---|---|\n| Doctor | `doctor1@demo.com` | `password123` |\n| Doctor | `doctor2@demo.com` | `password123` |\n| Patient | `patient1@demo.com` | `password123` |",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -81,6 +81,12 @@
       "value": "",
       "type": "string",
       "description": "Blocked slot ID — auto-set after blocking a doctor slot"
+    },
+    {
+      "key": "reviewId",
+      "value": "",
+      "type": "string",
+      "description": "Review ID — auto-set after submitting a doctor review"
     }
   ],
   "item": [
@@ -597,7 +603,7 @@
     },
     {
       "name": "👨‍⚕️ Doctors",
-      "description": "Doctor discovery, profile management, availability, and slot blocking.\n\n| Request | Role |\n|---|---|\n| List Doctors | `ANY` |\n| Get Doctor by ID | `ANY` |\n| Update Doctor Profile | `DOCTOR` (own only) |\n| Get Availability | `ANY` |\n| Update Availability | `DOCTOR` (own only) |\n| Get Available Slots | `ANY` |\n| Get Blocked Slots | `ANY` |\n| Block a Time Slot | `DOCTOR` (own only) |\n| Unblock a Time Slot | `DOCTOR` (own only) |",
+      "description": "Doctor discovery, profile management, availability, slot blocking, and reviews.\n\n| Request | Role |\n|---|---|\n| List Doctors | `ANY` |\n| Get All Specializations | `ANY` |\n| Get Doctor by ID | `ANY` |\n| Update Doctor Profile | `DOCTOR` (own only) |\n| Get Availability | `ANY` |\n| Update Availability | `DOCTOR` (own only) |\n| Get Available Slots | `ANY` |\n| Get Blocked Slots | `ANY` |\n| Block a Time Slot | `DOCTOR` (own only) |\n| Unblock a Time Slot | `DOCTOR` (own only) |\n| Get Doctor Reviews | `ANY` |\n| Submit Review | `PATIENT` |\n\n> ⚠️ **Route ordering note:** `GET /api/doctors/specializations` is registered before `GET /api/doctors/:id` on the backend to prevent Express treating `\"specializations\"` as an `:id` param.",
       "item": [
         {
           "name": "[ANY] List Doctors",
@@ -638,6 +644,36 @@
               ]
             },
             "description": "**Required Role:** `ANY` — Any authenticated user (patient or doctor).\n\n---\n\nPaginated list of all doctors. Used by patients to browse and select a doctor before booking.\n\n**Optional query filters:**\n- `specialization` — exact match, e.g. `Cardiology`\n- `search` — searches name and bio fields\n- `page`, `limit` — pagination (default: 1, 20 — max limit: 50)\n\n**Auto-captures:** `doctorId` from the first result for use in downstream requests."
+          },
+          "response": []
+        },
+        {
+          "name": "[ANY] Get All Specializations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('array of strings', () => {",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data).to.be.an('array');",
+                  "  if (data.length > 0) pm.expect(data[0]).to.be.a('string');",
+                  "});",
+                  "console.log('Specializations available:', pm.response.json().data);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/doctors/specializations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "doctors", "specializations"]
+            },
+            "description": "**Required Role:** `ANY` — Any authenticated user (patient or doctor).\n\n---\n\nReturns all distinct specialization strings currently in the database, ordered alphabetically.\n\nUsed by:\n- **Frontend `DoctorFilter` dropdown** — populates the specialization select on the doctor list page. Fetched independently so the dropdown never loses options when a filter is active.\n- **AI module** — injects this list into the Gemini prompt so recommendations are constrained to real DB values.\n\n**Response shape:**\n```json\n[\"Cardiology\", \"Dermatology\", \"General Practice\", \"Neurology\"]\n```\n\n> ⚠️ This route must be registered **before** `GET /api/doctors/:id` on the backend to prevent Express treating `\"specializations\"` as an `:id` param."
           },
           "response": []
         },
@@ -874,6 +910,80 @@
               "path": ["api", "doctors", "{{doctorId}}", "blocked-slots", "{{blockedSlotId}}"]
             },
             "description": "**Required Role:** `DOCTOR` — Must be logged in as the doctor who owns the blocked slot.\n\n> Returns `403 Forbidden` for patients or for a doctor removing another doctor's block.\n\n> ⚠️ Run **🔄 Activate Doctor Token** first if needed.\n\n---\n\nRemove a previously blocked time slot, making it available for patient booking again.\n\nUses `{{blockedSlotId}}` — auto-set by **[DOCTOR] Block a Time Slot** or **[ANY] Get Blocked Slots**."
+          },
+          "response": []
+        },
+        {
+          "name": "[ANY] Get Doctor Reviews",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('array', () => pm.expect(pm.response.json().data).to.be.an('array'));",
+                  "",
+                  "const reviews = pm.response.json().data;",
+                  "if (reviews?.length > 0) {",
+                  "  pm.collectionVariables.set('reviewId', reviews[0].id);",
+                  "  console.log('📌 reviewId saved:', reviews[0].id);",
+                  "  console.log('Average rating context:', reviews.length, 'review(s) found');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/doctors/{{doctorId}}/reviews",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "doctors", "{{doctorId}}", "reviews"]
+            },
+            "description": "**Required Role:** `ANY` — Any authenticated user (patient or doctor).\n\n---\n\nReturns all reviews submitted for a doctor, including patient name, avatar, rating (1–5), comment, and timestamp. Used by the patient-facing doctor profile page to display the review list and star breakdown.\n\n**Response shape:**\n```json\n[\n  {\n    \"id\": \"...\",\n    \"rating\": 5,\n    \"comment\": \"Very thorough and professional.\",\n    \"createdAt\": \"2026-05-20T10:00:00Z\",\n    \"patient\": { \"firstName\": \"Ana\", \"lastName\": \"Cruz\", \"profilePictureUrl\": null }\n  }\n]\n```\n\n**Auto-captures:** `reviewId` from the first result."
+          },
+          "response": []
+        },
+        {
+          "name": "[PATIENT] Submit Review",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "if (json.data?.id) {",
+                  "  pm.collectionVariables.set('reviewId', json.data.id);",
+                  "  console.log('📌 reviewId saved:', json.data.id);",
+                  "}",
+                  "",
+                  "// Guard: 409 is expected if review already submitted for this appointment",
+                  "if (pm.response.code === 409) {",
+                  "  console.warn('⚠ 409 Conflict — a review already exists for this appointment');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"appointmentId\": \"{{appointmentId}}\",\n  \"rating\": 5,\n  \"comment\": \"Dr. Santos was very thorough and explained everything clearly. Highly recommend.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/doctors/{{doctorId}}/reviews",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "doctors", "{{doctorId}}", "reviews"]
+            },
+            "description": "**Required Role:** `PATIENT` — Only patients can submit reviews.\n\n> Returns `403 Forbidden` for doctors.\n\n> ⚠️ Run **🔄 Activate Patient Token** first if you've been testing as a doctor.\n\n---\n\nSubmit a star rating and optional comment for a completed consultation. Displayed on the doctor's public profile.\n\n**Validation rules:**\n- `appointmentId` — required, valid UUID; must be a `completed` appointment\n- The appointment must belong to the requesting patient (403 if not)\n- The appointment must be assigned to the `doctorId` in the URL (400 if mismatch)\n- Only **one review per appointment** — returns `409 Conflict` if already reviewed\n- `rating` — required, integer `1–5`\n- `comment` — optional, max 1000 chars\n\n**Prerequisite flow:**\n1. Run **[PATIENT] Create Appointment** → auto-sets `appointmentId`\n2. Run **[DOCTOR] Update Appointment Status** with `\"status\": \"completed\"`\n3. Run this request as patient\n\n**Auto-captures:** `reviewId`"
           },
           "response": []
         }
