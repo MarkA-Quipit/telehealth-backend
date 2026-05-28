@@ -1,8 +1,14 @@
 import { AppError } from "../../shared/types";
 import { doctorsRepository } from "./doctors.repository";
-import type { UpdateDoctorInput, SetAvailabilityInput, BlockSlotInput } from "./doctors.schema";
+import { patientsService } from "../patients/patients.service";
+import type { UpdateDoctorInput, SetAvailabilityInput, BlockSlotInput, CreateReviewInput } from "./doctors.schema";
 
 export const doctorsService = {
+  // ── getDistinctSpecializations ────────────────────────────────────────────
+  async getDistinctSpecializations() {
+    return doctorsRepository.getDistinctSpecializations();
+  },
+
   // ── listDoctors ───────────────────────────────────────────────────────────
   async listDoctors(filters: {
     specialization?: string;
@@ -142,5 +148,47 @@ export const doctorsService = {
       throw new AppError("You are not allowed to delete blocked slots for this doctor", 403);
     }
     await doctorsRepository.deleteBlockedSlot(slotId);
+  },
+
+  // ── addReview ─────────────────────────────────────────────────────────────
+  async addReview(requesterId: string, doctorId: string, data: CreateReviewInput) {
+    // 1. Resolve patient — patientsService throws 404 if no profile found
+    const patient = await patientsService.getPatientProfileByUserId(requesterId);
+    if (!patient) throw new AppError("Patient profile not found", 403);
+
+    // 2. Verify appointment
+    const appointment = await doctorsRepository.findAppointmentForReview(data.appointmentId);
+    if (!appointment) throw new AppError("Appointment not found", 404);
+    if (appointment.status !== "completed") {
+      throw new AppError("Appointment is not completed", 400);
+    }
+    if (appointment.patientId !== patient.id) {
+      throw new AppError("You are not the patient on this appointment", 403);
+    }
+
+    // 3. Verify appointment belongs to this doctor
+    if (appointment.doctorId !== doctorId) {
+      throw new AppError("Appointment does not belong to this doctor", 400);
+    }
+
+    // 4. Check for duplicate review
+    const existing = await doctorsRepository.findReviewByAppointment(data.appointmentId);
+    if (existing) throw new AppError("You have already reviewed this consultation", 409);
+
+    // 5. Insert
+    return doctorsRepository.createReview({
+      appointmentId: data.appointmentId,
+      patientId: patient.id,
+      doctorId,
+      rating: data.rating,
+      comment: data.comment,
+    });
+  },
+
+  // ── getReviews ────────────────────────────────────────────────────────────
+  async getReviews(doctorId: string) {
+    const doctor = await doctorsRepository.findById(doctorId);
+    if (!doctor) throw new AppError("Doctor not found", 404);
+    return doctorsRepository.findReviewsByDoctor(doctorId);
   },
 };

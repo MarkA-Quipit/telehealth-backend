@@ -15,6 +15,13 @@
       "when": 1779885764144,
       "tag": "0001_wide_darkhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779955462733,
+      "tag": "0002_fair_hitman",
+      "breakpoints": true
     }
   ]
 }

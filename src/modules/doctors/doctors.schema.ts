@@ -13,6 +13,7 @@ import { relations } from "drizzle-orm";
 import { z } from "zod/v4";
 import { users } from "../users/users.schema";
 import { appointments } from "../appointments/appointments.schema";
+import { patientProfiles } from "../patients/patients.schema";
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -102,6 +103,26 @@ export const doctorBlockedSlots = pgTable("doctor_blocked_slots", {
 });
 
 // ---------------------------------------------------------------------------
+// reviews  (one per appointment)
+// ---------------------------------------------------------------------------
+export const reviews = pgTable("reviews", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  appointmentId: uuid("appointment_id")
+    .notNull()
+    .unique()
+    .references(() => appointments.id, { onDelete: "cascade" }),
+  patientId: uuid("patient_id")
+    .notNull()
+    .references(() => patientProfiles.id, { onDelete: "cascade" }),
+  doctorId: uuid("doctor_id")
+    .notNull()
+    .references(() => doctorProfiles.id, { onDelete: "cascade" }),
+  rating: integer("rating").notNull(),               // 1–5
+  comment: text("comment"),                          // nullable
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------
 export const doctorProfilesRelations = relations(doctorProfiles, ({ one, many }) => ({
@@ -109,6 +130,7 @@ export const doctorProfilesRelations = relations(doctorProfiles, ({ one, many })
   availability: many(doctorAvailability),
   blockedSlots: many(doctorBlockedSlots),
   appointments: many(appointments),
+  reviews: many(reviews),
 }));
 
 export const doctorAvailabilityRelations = relations(doctorAvailability, ({ one }) => ({
@@ -123,6 +145,12 @@ export const doctorBlockedSlotsRelations = relations(doctorBlockedSlots, ({ one 
     fields: [doctorBlockedSlots.doctorId],
     references: [doctorProfiles.id],
   }),
+}));
+
+export const reviewsRelations = relations(reviews, ({ one }) => ({
+  doctor: one(doctorProfiles, { fields: [reviews.doctorId], references: [doctorProfiles.id] }),
+  patient: one(patientProfiles, { fields: [reviews.patientId], references: [patientProfiles.id] }),
+  appointment: one(appointments, { fields: [reviews.appointmentId], references: [appointments.id] }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -155,6 +183,13 @@ export const blockSlotSchema = z.object({
   reason: z.string().max(200).optional(),
 });
 
+export const createReviewSchema = z.object({
+  appointmentId: z.string().uuid(),
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().max(1000).optional(),
+});
+
 export type UpdateDoctorInput = z.infer<typeof updateDoctorSchema>;
 export type SetAvailabilityInput = z.infer<typeof setAvailabilitySchema>;
 export type BlockSlotInput = z.infer<typeof blockSlotSchema>;
+export type CreateReviewInput = z.infer<typeof createReviewSchema>;

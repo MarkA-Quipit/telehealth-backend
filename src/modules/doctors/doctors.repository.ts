@@ -1,8 +1,9 @@
-import { eq, ilike, or, and, count, ne, gte, lte } from "drizzle-orm";
+import { eq, ilike, or, and, count, ne, gte, lte, avg, inArray } from "drizzle-orm";
 import { db } from "../../config/db";
-import { doctorProfiles, doctorAvailability, doctorBlockedSlots } from "./doctors.schema";
+import { doctorProfiles, doctorAvailability, doctorBlockedSlots, reviews } from "./doctors.schema";
 import { users } from "../users/users.schema";
 import { appointments } from "../appointments/appointments.schema";
+import { patientProfiles } from "../patients/patients.schema";
 import type { UpdateDoctorInput } from "./doctors.schema";
 
 // ---------------------------------------------------------------------------
@@ -121,6 +122,25 @@ export interface DoctorWithUser {
   updatedAt: Date;
   // from users
   email: string;
+  // computed
+  averageRating: number | null;
+  reviewCount: number;
+  completedConsultationsCount: number;
+}
+
+export interface Review {
+  id: string;
+  appointmentId: string;
+  patientId: string;
+  doctorId: string;
+  rating: number;
+  comment: string | null;
+  createdAt: Date;
+  patient: {
+    firstName: string;
+    lastName: string;
+    profilePictureUrl: string | null;
+  };
 }
 
 export interface DoctorFilters {
@@ -133,9 +153,16 @@ export interface DoctorFilters {
 // ---------------------------------------------------------------------------
 // Map Drizzle row → DoctorWithUser
 // ---------------------------------------------------------------------------
+interface DoctorStats {
+  averageRating: number | null;
+  reviewCount: number;
+  completedConsultationsCount: number;
+}
+
 function mapRow(
   d: typeof doctorProfiles.$inferSelect,
   u: { email: string },
+  stats: DoctorStats = { averageRating: null, reviewCount: 0, completedConsultationsCount: 0 },
 ): DoctorWithUser {
   return {
     id: d.id,
@@ -154,7 +181,56 @@ function mapRow(
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
     email: u.email,
+    averageRating: stats.averageRating,
+    reviewCount: stats.reviewCount,
+    completedConsultationsCount: stats.completedConsultationsCount,
   };
+}
+
+// Fetch review stats + completed consultation counts for a list of doctorIds
+async function fetchDoctorStats(doctorIds: string[]): Promise<Map<string, DoctorStats>> {
+  const statsMap = new Map<string, DoctorStats>();
+  if (doctorIds.length === 0) return statsMap;
+
+  const [reviewStats, consultStats] = await Promise.all([
+    db
+      .select({
+        doctorId: reviews.doctorId,
+        averageRating: avg(reviews.rating),
+        reviewCount: count(reviews.id),
+      })
+      .from(reviews)
+      .where(inArray(reviews.doctorId, doctorIds))
+      .groupBy(reviews.doctorId),
+    db
+      .select({
+        doctorId: appointments.doctorId,
+        completedCount: count(appointments.id),
+      })
+      .from(appointments)
+      .where(
+        and(
+          inArray(appointments.doctorId, doctorIds),
+          eq(appointments.status, "completed"),
+        ),
+      )
+      .groupBy(appointments.doctorId),
+  ]);
+
+  for (const id of doctorIds) {
+    statsMap.set(id, { averageRating: null, reviewCount: 0, completedConsultationsCount: 0 });
+  }
+  for (const r of reviewStats) {
+    const existing = statsMap.get(r.doctorId)!;
+    existing.averageRating = r.averageRating != null ? Math.round(Number(r.averageRating) * 10) / 10 : null;
+    existing.reviewCount = Number(r.reviewCount);
+  }
+  for (const c of consultStats) {
+    const existing = statsMap.get(c.doctorId)!;
+    existing.completedConsultationsCount = Number(c.completedCount);
+  }
+
+  return statsMap;
 }
 
 // ---------------------------------------------------------------------------
@@ -199,8 +275,11 @@ export const doctorsRepository = {
         .where(where),
     ]);
 
+    const doctorIds = rows.map((r) => r.doctor_profiles.id);
+    const statsMap = await fetchDoctorStats(doctorIds);
+
     return {
-      items: rows.map((r) => mapRow(r.doctor_profiles, r.users)),
+      items: rows.map((r) => mapRow(r.doctor_profiles, r.users, statsMap.get(r.doctor_profiles.id))),
       total: Number(countRows[0]?.total ?? 0),
     };
   },
@@ -215,7 +294,8 @@ export const doctorsRepository = {
       .limit(1);
 
     if (!rows[0]) return null;
-    return mapRow(rows[0].doctor_profiles, rows[0].users);
+    const statsMap = await fetchDoctorStats([doctorId]);
+    return mapRow(rows[0].doctor_profiles, rows[0].users, statsMap.get(doctorId));
   },
 
   // ── findByUserId ──────────────────────────────────────────────────────────
@@ -459,5 +539,148 @@ export const doctorsRepository = {
     });
 
     return available;
+  },
+
+  // ── findAppointmentForReview — validates appointment for review eligibility ─
+  async findAppointmentForReview(appointmentId: string): Promise<{
+    id: string;
+    doctorId: string;
+    patientId: string;
+    status: string;
+  } | null> {
+    const rows = await db
+      .select({
+        id: appointments.id,
+        doctorId: appointments.doctorId,
+        patientId: appointments.patientId,
+        status: appointments.status,
+      })
+      .from(appointments)
+      .where(eq(appointments.id, appointmentId))
+      .limit(1);
+    return rows[0] ?? null;
+  },
+
+  // ── createReview ──────────────────────────────────────────────────────────
+  async createReview(data: {
+    appointmentId: string;
+    patientId: string;
+    doctorId: string;
+    rating: number;
+    comment?: string;
+  }): Promise<Review> {
+    const inserted = await db
+      .insert(reviews)
+      .values({
+        appointmentId: data.appointmentId,
+        patientId: data.patientId,
+        doctorId: data.doctorId,
+        rating: data.rating,
+        comment: data.comment ?? null,
+      })
+      .returning();
+
+    const row = inserted[0];
+    // Fetch the patient details for the response
+    const patientRows = await db
+      .select({
+        firstName: patientProfiles.firstName,
+        lastName: patientProfiles.lastName,
+        profilePictureUrl: patientProfiles.profilePictureUrl,
+      })
+      .from(patientProfiles)
+      .where(eq(patientProfiles.id, row.patientId))
+      .limit(1);
+
+    const patient = patientRows[0] ?? { firstName: '', lastName: '', profilePictureUrl: null };
+
+    return {
+      id: row.id,
+      appointmentId: row.appointmentId,
+      patientId: row.patientId,
+      doctorId: row.doctorId,
+      rating: row.rating,
+      comment: row.comment ?? null,
+      createdAt: row.createdAt,
+      patient: {
+        firstName: patient.firstName,
+        lastName: patient.lastName,
+        profilePictureUrl: patient.profilePictureUrl ?? null,
+      },
+    };
+  },
+
+  // ── findReviewsByDoctor ───────────────────────────────────────────────────
+  async findReviewsByDoctor(doctorId: string): Promise<Review[]> {
+    const rows = await db
+      .select({
+        id: reviews.id,
+        appointmentId: reviews.appointmentId,
+        patientId: reviews.patientId,
+        doctorId: reviews.doctorId,
+        rating: reviews.rating,
+        comment: reviews.comment,
+        createdAt: reviews.createdAt,
+        patientFirstName: patientProfiles.firstName,
+        patientLastName: patientProfiles.lastName,
+        patientProfilePictureUrl: patientProfiles.profilePictureUrl,
+      })
+      .from(reviews)
+      .innerJoin(patientProfiles, eq(reviews.patientId, patientProfiles.id))
+      .where(eq(reviews.doctorId, doctorId))
+      .orderBy(reviews.createdAt);
+
+    return rows.map((r) => ({
+      id: r.id,
+      appointmentId: r.appointmentId,
+      patientId: r.patientId,
+      doctorId: r.doctorId,
+      rating: r.rating,
+      comment: r.comment ?? null,
+      createdAt: r.createdAt,
+      patient: {
+        firstName: r.patientFirstName,
+        lastName: r.patientLastName,
+        profilePictureUrl: r.patientProfilePictureUrl ?? null,
+      },
+    }));
+  },
+
+  // ── findReviewByAppointment ───────────────────────────────────────────────
+  async findReviewByAppointment(appointmentId: string): Promise<Review | null> {
+    const rows = await db
+      .select({
+        id: reviews.id,
+        appointmentId: reviews.appointmentId,
+        patientId: reviews.patientId,
+        doctorId: reviews.doctorId,
+        rating: reviews.rating,
+        comment: reviews.comment,
+        createdAt: reviews.createdAt,
+        patientFirstName: patientProfiles.firstName,
+        patientLastName: patientProfiles.lastName,
+        patientProfilePictureUrl: patientProfiles.profilePictureUrl,
+      })
+      .from(reviews)
+      .innerJoin(patientProfiles, eq(reviews.patientId, patientProfiles.id))
+      .where(eq(reviews.appointmentId, appointmentId))
+      .limit(1);
+
+    if (!rows[0]) return null;
+    const r = rows[0];
+    return {
+      id: r.id,
+      appointmentId: r.appointmentId,
+      patientId: r.patientId,
+      doctorId: r.doctorId,
+      rating: r.rating,
+      comment: r.comment ?? null,
+      createdAt: r.createdAt,
+      patient: {
+        firstName: r.patientFirstName,
+        lastName: r.patientLastName,
+        profilePictureUrl: r.patientProfilePictureUrl ?? null,
+      },
+    };
   },
 };

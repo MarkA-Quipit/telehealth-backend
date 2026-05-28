@@ -2,7 +2,7 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import { authenticate, requireRole } from "../../shared/middleware/auth.middleware";
 import { doctorsService } from "./doctors.service";
-import { updateDoctorSchema, setAvailabilitySchema, blockSlotSchema } from "./doctors.schema";
+import { updateDoctorSchema, setAvailabilitySchema, blockSlotSchema, createReviewSchema } from "./doctors.schema";
 import { z } from "zod/v4";
 
 const router = Router();
@@ -22,6 +22,15 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
 
   const result = await doctorsService.listDoctors({ specialization, search, page, limit });
   res.status(200).json({ success: true, message: "Doctors retrieved", data: result });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/doctors/specializations  — distinct specialization list for dropdown
+// MUST be registered BEFORE /:id to prevent "specializations" being treated as id
+// ---------------------------------------------------------------------------
+router.get("/specializations", authenticate, async (_req: Request, res: Response) => {
+  const specializations = await doctorsService.getDistinctSpecializations();
+  res.status(200).json({ success: true, message: "Specializations retrieved", data: specializations });
 });
 
 // ---------------------------------------------------------------------------
@@ -123,6 +132,32 @@ router.delete(
 
     await doctorsService.deleteBlockedSlot(req.user!.id, req.params.id, req.params.slotId);
     res.status(200).json({ success: true, message: "Blocked slot removed", data: null });
+  },
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/doctors/:id/reviews  — any authenticated user
+// ---------------------------------------------------------------------------
+router.get(
+  "/:id/reviews",
+  authenticate,
+  async (req: Request<{ id: string }>, res: Response) => {
+    const reviewList = await doctorsService.getReviews(req.params.id);
+    res.status(200).json({ success: true, message: "Reviews retrieved", data: reviewList });
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /api/doctors/:id/reviews  — patient only
+// ---------------------------------------------------------------------------
+router.post(
+  "/:id/reviews",
+  authenticate,
+  requireRole("patient"),
+  async (req: Request<{ id: string }>, res: Response) => {
+    const body = createReviewSchema.parse(req.body);
+    const review = await doctorsService.addReview(req.user!.id, req.params.id, body);
+    res.status(201).json({ success: true, message: "Review submitted", data: review });
   },
 );
 
