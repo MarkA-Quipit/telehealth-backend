@@ -2,6 +2,7 @@ import { db } from '../../config/db';
 import { roles } from '../../modules/auth/auth.schema';
 
 const ROLES = [
+  { name: 'admin',   description: 'Admin user'    },
   { name: 'patient', description: 'Patient user' },
   { name: 'doctor',  description: 'Doctor user'  },
 ] as const;

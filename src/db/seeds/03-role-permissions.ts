@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../../config/db';
 import { roles, permissions, rolePermissions } from '../../modules/auth/auth.schema';
 
+// Admin is intentionally omitted here — it receives every permission dynamically.
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   patient: [
     'appointments:create',
@@ -28,15 +29,25 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
 };
 
 export async function seedRolePermissions(): Promise<void> {
-  // Load all roles and permissions into maps for FK resolution
   const allRoles       = await db.select({ id: roles.id, name: roles.name }).from(roles);
   const allPermissions = await db.select({ id: permissions.id, name: permissions.name }).from(permissions);
 
   const roleMap = new Map(allRoles.map((r)       => [r.name, r.id]));
   const permMap = new Map(allPermissions.map((p) => [p.name, p.id]));
 
-  // Build the join rows, skipping any that can't be resolved
   const rows: { roleId: string; permissionId: string }[] = [];
+
+  // Admin gets every permission that exists — no hardcoded list needed.
+  const adminRoleId = roleMap.get('admin');
+  if (!adminRoleId) {
+    console.warn(`  ⚠ role 'admin' not found — skipping admin permissions`);
+  } else {
+    for (const { id: permissionId } of allPermissions) {
+      rows.push({ roleId: adminRoleId, permissionId });
+    }
+  }
+
+  // Remaining roles use their explicit lists.
   for (const [roleName, permNames] of Object.entries(ROLE_PERMISSIONS)) {
     const roleId = roleMap.get(roleName);
     if (!roleId) {

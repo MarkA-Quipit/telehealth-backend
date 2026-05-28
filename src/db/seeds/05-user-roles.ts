@@ -5,9 +5,17 @@ import { roles, userRoles } from '../../modules/auth/auth.schema';
 import { DEMO_EMAILS } from './04-users';
 
 const ASSIGNMENTS = [
+  { email: DEMO_EMAILS.admin,    roleName: 'admin'   },
   { email: DEMO_EMAILS.doctor1,  roleName: 'doctor'  },
   { email: DEMO_EMAILS.doctor2,  roleName: 'doctor'  },
+  { email: DEMO_EMAILS.doctor3,  roleName: 'doctor'  },
+  { email: DEMO_EMAILS.doctor4,  roleName: 'doctor'  },
+  { email: DEMO_EMAILS.doctor5,  roleName: 'doctor'  },
   { email: DEMO_EMAILS.patient1, roleName: 'patient' },
+  { email: DEMO_EMAILS.patient2, roleName: 'patient' },
+  { email: DEMO_EMAILS.patient3, roleName: 'patient' },
+  { email: DEMO_EMAILS.patient4, roleName: 'patient' },
+  { email: DEMO_EMAILS.patient5, roleName: 'patient' },
 ] as const;
 
 export async function seedUserRoles(): Promise<void> {
