@@ -23,6 +23,10 @@ export interface RecommendationResult {
   recommendations: Array<AIRecommendation & { doctors: DoctorWithUser[] }>;
 }
 
+export type StreamChunk =
+  | { type: "token"; token: string }
+  | { type: "done"; recommendations: RecommendationResult };
+
 // ---------------------------------------------------------------------------
 // Prompt builder — injects the live specialization list from the DB
 // ---------------------------------------------------------------------------
@@ -137,5 +141,51 @@ export const aiService = {
       .where(eq(aiRecommendationLogs.userId, userId))
       .orderBy(desc(aiRecommendationLogs.createdAt))
       .limit(10);
+  },
+
+  async *streamRecommendations(symptoms: string, userId: string): AsyncGenerator<StreamChunk> {
+    // 1. Fetch live specialization list
+    const specializations = await doctorsRepository.getDistinctSpecializations();
+    const prompt = buildRecommendationPrompt(symptoms, specializations);
+
+    // 2. Call Groq with stream: true (no response_format — JSON mode blocks streaming)
+    const stream = await groqClient.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: GROQ_MODEL,
+      stream: true,
+    });
+
+    // 3. Yield each token as it arrives; accumulate full text
+    let fullText = "";
+    for await (const chunk of stream) {
+      const token = chunk.choices[0]?.delta?.content ?? "";
+      if (token) {
+        fullText += token;
+        yield { type: "token", token };
+      }
+    }
+
+    // 4. Parse + enrich with doctors
+    const parsed = parseAIResponse(fullText);
+    const enriched = await Promise.all(
+      parsed.recommendations.map(async (rec) => {
+        const { items } = await doctorsRepository.findAll({
+          specialization: rec.specialization,
+          page: 1,
+          limit: 3,
+        });
+        return { ...rec, doctors: items };
+      }),
+    );
+
+    // 5. Log (fire-and-forget)
+    db.insert(aiRecommendationLogs)
+      .values({ userId, symptoms, recommendations: JSON.stringify(enriched) })
+      .catch((err: unknown) => {
+        console.error("[AI] Failed to log streaming recommendation:", err);
+      });
+
+    // 6. Yield final done chunk
+    yield { type: "done", recommendations: { recommendations: enriched } };
   },
 };
