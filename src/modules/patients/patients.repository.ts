@@ -1,6 +1,6 @@
 import { eq, and, inArray, desc } from "drizzle-orm";
 import { db } from "../../config/db";
-import { patientProfiles } from "./patients.schema";
+import { patientProfiles, patientDocuments } from "./patients.schema";
 import { users } from "../users/users.schema";
 import { appointments } from "../appointments/appointments.schema";
 import { consultationNotes } from "../consultations/consultations.schema";
@@ -24,6 +24,8 @@ export interface PatientWithUser {
   medicalHistory: string | null;       // mapped from pastMedicalConditions
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
+  insuranceProvider: string | null;
+  insurancePolicyNumber: string | null;
   profilePictureUrl: string | null;
   phoneNumber: string | null;
   createdAt: Date;
@@ -52,6 +54,8 @@ function mapRow(
     medicalHistory: p.pastMedicalConditions ?? null,
     emergencyContactName: p.emergencyContactName ?? null,
     emergencyContactPhone: p.emergencyContactPhone ?? null,
+    insuranceProvider: p.insuranceProvider ?? null,
+    insurancePolicyNumber: p.insurancePolicyNumber ?? null,
     profilePictureUrl: p.profilePictureUrl ?? null,
     phoneNumber: p.phoneNumber ?? null,
     createdAt: p.createdAt,
@@ -142,6 +146,8 @@ export const patientsRepository = {
     if (data.medicalHistory !== undefined) dbData.pastMedicalConditions = data.medicalHistory;
     if (data.emergencyContactName !== undefined) dbData.emergencyContactName = data.emergencyContactName;
     if (data.emergencyContactPhone !== undefined) dbData.emergencyContactPhone = data.emergencyContactPhone;
+    if (data.insuranceProvider !== undefined) dbData.insuranceProvider = data.insuranceProvider;
+    if (data.insurancePolicyNumber !== undefined) dbData.insurancePolicyNumber = data.insurancePolicyNumber;
 
     // We need firstName/lastName for the initial INSERT values — fetch existing first
     const existing = await this.findByUserId(userId);
@@ -161,5 +167,23 @@ export const patientsRepository = {
 
     const updated = await this.findByUserId(userId);
     return updated!;
+  },
+
+  // ── saveDocument ──────────────────────────────────────────────────────────
+  async saveDocument(patientId: string, url: string, fileName: string, fileType: string) {
+    const result = await db
+      .insert(patientDocuments)
+      .values({ patientId, url, fileName, fileType })
+      .returning();
+    return result[0];
+  },
+
+  // ── getDocuments ──────────────────────────────────────────────────────────
+  async getDocuments(patientId: string) {
+    return db
+      .select()
+      .from(patientDocuments)
+      .where(eq(patientDocuments.patientId, patientId))
+      .orderBy(desc(patientDocuments.uploadedAt));
   },
 };

@@ -1,8 +1,21 @@
 import { Router } from "express";
 import type { Response, Request } from "express";
+import multer from "multer";
 import { authenticate, requireRole } from "../../shared/middleware/auth.middleware";
 import { patientsService } from "./patients.service";
 import { updatePatientSchema } from "./patients.schema";
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("image/") || file.mimetype === "application/pdf") {
+      cb(null, true);
+    } else {
+      cb(new Error("Only images and PDF files are allowed"));
+    }
+  },
+});
 
 const router = Router();
 
@@ -18,6 +31,32 @@ router.get(
     res.status(200).json({ success: true, message: "Patient history retrieved", data: result });
   },
 );
+
+// ---------------------------------------------------------------------------
+// POST /api/patients/:id/documents  — patient uploads a document
+// ---------------------------------------------------------------------------
+router.post(
+  "/:id/documents",
+  authenticate,
+  requireRole("patient"),
+  upload.single("file"),
+  async (req: Request<{ id: string }>, res: Response) => {
+    if (!req.file) {
+      res.status(400).json({ success: false, message: "No file uploaded" });
+      return;
+    }
+    const documents = await patientsService.uploadDocument(req.user!.id, req.params.id, req.file);
+    res.status(201).json({ success: true, message: "Document uploaded", data: documents });
+  },
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/patients/:id/documents  — list documents for a patient
+// ---------------------------------------------------------------------------
+router.get("/:id/documents", authenticate, async (req: Request<{ id: string }>, res: Response) => {
+  const documents = await patientsService.getDocuments(req.params.id);
+  res.status(200).json({ success: true, message: "Documents retrieved", data: documents });
+});
 
 // ---------------------------------------------------------------------------
 // GET /api/patients/:id

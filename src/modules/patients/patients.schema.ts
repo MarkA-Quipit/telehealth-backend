@@ -53,8 +53,26 @@ export const patientProfiles = pgTable("patient_profiles", {
   pastMedicalConditions: text("past_medical_conditions"),
   familyMedicalHistory: text("family_medical_history"),
 
+  // Insurance
+  insuranceProvider: varchar("insurance_provider", { length: 150 }),
+  insurancePolicyNumber: varchar("insurance_policy_number", { length: 100 }),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// patient_documents
+// ---------------------------------------------------------------------------
+export const patientDocuments = pgTable("patient_documents", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  patientId: uuid("patient_id")
+    .notNull()
+    .references(() => patientProfiles.id, { onDelete: "cascade" }),
+  url: text("url").notNull(),
+  fileName: varchar("file_name", { length: 255 }).notNull(),
+  fileType: varchar("file_type", { length: 100 }).notNull(),
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---------------------------------------------------------------------------
@@ -77,6 +95,8 @@ export const updatePatientSchema = z.object({
   medicalHistory: z.string().max(2000).optional(),                       // maps to pastMedicalConditions
   emergencyContactName: z.string().max(100).optional(),
   emergencyContactPhone: z.string().max(20).optional(),
+  insuranceProvider: z.string().max(150).optional(),
+  insurancePolicyNumber: z.string().max(100).optional(),
 });
 
 export type UpdatePatientInput = z.infer<typeof updatePatientSchema>;

@@ -1,5 +1,6 @@
 import { AppError } from "../../shared/types";
 import { patientsRepository } from "./patients.repository";
+import { uploadDocumentBuffer } from "../../config/cloudinary";
 import type { UpdatePatientInput } from "./patients.schema";
 
 export const patientsService = {
@@ -68,5 +69,33 @@ export const patientsService = {
     }
 
     return patientsRepository.upsert(patient.userId, data);
+  },
+
+  // ── uploadDocument ────────────────────────────────────────────────────────
+  async uploadDocument(
+    requesterId: string,
+    patientId: string,
+    file: { buffer: Buffer; originalname: string; mimetype: string },
+  ) {
+    const patient = await patientsRepository.findById(patientId);
+    if (!patient) throw new AppError("Patient not found", 404);
+    if (patient.userId !== requesterId) throw new AppError("Forbidden", 403);
+
+    const secureUrl = await uploadDocumentBuffer(
+      patientId,
+      file.originalname,
+      file.buffer,
+      file.mimetype,
+    );
+
+    await patientsRepository.saveDocument(patientId, secureUrl, file.originalname, file.mimetype);
+    return patientsRepository.getDocuments(patientId);
+  },
+
+  // ── getDocuments ──────────────────────────────────────────────────────────
+  async getDocuments(patientId: string) {
+    const patient = await patientsRepository.findById(patientId);
+    if (!patient) throw new AppError("Patient not found", 404);
+    return patientsRepository.getDocuments(patientId);
   },
 };
