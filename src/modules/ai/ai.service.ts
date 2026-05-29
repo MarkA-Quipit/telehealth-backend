@@ -1,6 +1,11 @@
+import { desc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { groqClient, GROQ_MODEL } from "../../config/groq";
+import { db } from "../../config/db";
 import { doctorsRepository } from "../doctors/doctors.repository";
 import type { DoctorWithUser } from "../doctors/doctors.repository";
+import { aiRecommendationLogs } from "./ai.schema";
+import type { AiRecommendationLog } from "./ai.schema";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -75,7 +80,7 @@ function parseAIResponse(text: string): ParsedAIResponse {
 // Service
 // ---------------------------------------------------------------------------
 export const aiService = {
-  async getRecommendations(symptoms: string): Promise<RecommendationResult> {
+  async getRecommendations(symptoms: string, userId: string): Promise<RecommendationResult> {
     // 1. Fetch live specialization list from DB first
     const specializations = await doctorsRepository.getDistinctSpecializations();
 
@@ -111,6 +116,26 @@ export const aiService = {
       }),
     );
 
+    // 6. Log the completed recommendation (fire-and-forget — don't block the response)
+    db.insert(aiRecommendationLogs)
+      .values({
+        userId,
+        symptoms,
+        recommendations: JSON.stringify(enriched),
+      })
+      .catch((err: unknown) => {
+        console.error("[AI] Failed to log recommendation:", err);
+      });
+
     return { recommendations: enriched };
+  },
+
+  async getHistory(userId: string): Promise<AiRecommendationLog[]> {
+    return db
+      .select()
+      .from(aiRecommendationLogs)
+      .where(eq(aiRecommendationLogs.userId, userId))
+      .orderBy(desc(aiRecommendationLogs.createdAt))
+      .limit(10);
   },
 };
