@@ -1,4 +1,4 @@
-import { eq, and, count } from "drizzle-orm";
+import { eq, and, count, desc } from "drizzle-orm";
 import { db } from "../../config/db";
 import { notifications } from "./notifications.schema";
 import type { CreateNotificationData, Notification } from "./notifications.schema";
@@ -22,13 +22,29 @@ export const notificationsRepository = {
   },
 
   // ── findByUser ────────────────────────────────────────────────────────────
-  async findByUser(userId: string, limit = 50): Promise<Notification[]> {
-    return db
-      .select()
-      .from(notifications)
-      .where(eq(notifications.userId, userId))
-      .orderBy(notifications.createdAt)
-      .limit(limit);
+  async findByUser(
+    userId: string,
+    type?: string,
+    page = 1,
+    limit = 20,
+  ): Promise<{ items: Notification[]; total: number }> {
+    const offset = (page - 1) * limit;
+    const conditions = type
+      ? and(eq(notifications.userId, userId), eq(notifications.type, type as Notification["type"]))
+      : eq(notifications.userId, userId);
+
+    const [items, countResult] = await Promise.all([
+      db
+        .select()
+        .from(notifications)
+        .where(conditions)
+        .orderBy(desc(notifications.createdAt))
+        .limit(limit)
+        .offset(offset),
+      db.select({ total: count() }).from(notifications).where(conditions),
+    ]);
+
+    return { items, total: Number(countResult[0]?.total ?? 0) };
   },
 
   // ── countUnread ───────────────────────────────────────────────────────────

@@ -40,12 +40,15 @@ export const notificationsService = {
   // ── getNotifications ──────────────────────────────────────────────────────
   async getNotifications(
     userId: string,
-  ): Promise<{ notifications: Notification[]; unreadCount: number }> {
-    const [notificationsList, unreadCount] = await Promise.all([
-      notificationsRepository.findByUser(userId),
+    type?: string,
+    page = 1,
+    limit = 20,
+  ): Promise<{ items: Notification[]; total: number; unreadCount: number; page: number; limit: number }> {
+    const [{ items, total }, unreadCount] = await Promise.all([
+      notificationsRepository.findByUser(userId, type, page, limit),
       notificationsRepository.countUnread(userId),
     ]);
-    return { notifications: notificationsList, unreadCount };
+    return { items, total, unreadCount, page, limit };
   },
 
   // ── markRead ──────────────────────────────────────────────────────────────
