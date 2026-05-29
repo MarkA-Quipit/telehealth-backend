@@ -261,10 +261,10 @@ export const doctorsRepository = {
       );
     }
     if (minFee != null) {
-      conditions.push(gte(doctorProfiles.consultationFee, String(minFee)));
+      conditions.push(gte(doctorProfiles.consultationFee, minFee));
     }
     if (maxFee != null) {
-      conditions.push(lte(doctorProfiles.consultationFee, String(maxFee)));
+      conditions.push(lte(doctorProfiles.consultationFee, maxFee));
     }
     if (minExperience != null) {
       conditions.push(gte(doctorProfiles.yearsOfExperience, minExperience));
