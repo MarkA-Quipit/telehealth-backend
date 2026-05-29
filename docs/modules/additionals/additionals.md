@@ -87,23 +87,6 @@ Priority order matches the plan. Items marked **(BE)** = backend only, **(FE)** 
 
 ---
 
-### AP3 — DataTable for Appointment Lists *(FE)*
-
-Replace card list in both pages with TanStack Table (Shadcn DataTable pattern).
-
-- `AppointmentListPage.tsx` (patient) — columns: Date, Doctor, Specialization, Status, Actions
-- `DoctorAppointmentListPage.tsx` (doctor) — columns: Date, Patient, Status, Actions
-- Sortable by date. Filterable by status via the existing filter UI.
-
----
-
-### N1 — Notification Deletion *(FULL)*
-
-- **Backend:** `DELETE /api/notifications/:id` in `notifications.controller.ts` + `notifications.repository.ts` (add `deleteById` method) + `notifications.service.ts`
-- **Frontend:** Delete (×) button on each row in `NotificationList.tsx` → call `DELETE` via `useMutation`
-
----
-
 ### C2 — Session Duration Display *(FE)*
 
 Calculate `(endsAt - scheduledAt)` in minutes. Show "30-min session" badge in:

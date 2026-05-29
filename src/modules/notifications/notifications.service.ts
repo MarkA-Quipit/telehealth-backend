@@ -1,5 +1,6 @@
 import { pusher } from "../../config/pusher";
 import { notificationsRepository } from "./notifications.repository";
+import { AppError } from "../../shared/types";
 import type { NotificationType, Notification } from "./notifications.schema";
 
 export const notificationsService = {
@@ -55,5 +56,13 @@ export const notificationsService = {
   // ── markAllRead ───────────────────────────────────────────────────────────
   async markAllRead(userId: string): Promise<void> {
     await notificationsRepository.markAllRead(userId);
+  },
+
+  // ── deleteNotification ────────────────────────────────────────────────────
+  async deleteNotification(userId: string, notificationId: string): Promise<void> {
+    const notification = await notificationsRepository.findById(notificationId);
+    if (!notification) throw new AppError("Notification not found", 404);
+    if (notification.userId !== userId) throw new AppError("Forbidden", 403);
+    await notificationsRepository.deleteById(notificationId);
   },
 };

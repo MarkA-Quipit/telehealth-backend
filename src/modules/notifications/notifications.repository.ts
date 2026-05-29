@@ -70,4 +70,19 @@ export const notificationsRepository = {
         ),
       );
   },
+
+  // ── deleteById ────────────────────────────────────────────────────────────
+  async deleteById(id: string): Promise<void> {
+    await db.delete(notifications).where(eq(notifications.id, id));
+  },
+
+  // ── findById ──────────────────────────────────────────────────────────────
+  async findById(id: string): Promise<Notification | null> {
+    const rows = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.id, id))
+      .limit(1);
+    return rows[0] ?? null;
+  },
 };

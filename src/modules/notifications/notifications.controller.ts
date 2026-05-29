@@ -31,4 +31,12 @@ router.patch("/:id/read", authenticate, async (req: Request<{ id: string }>, res
   res.status(200).json({ success: true, message: "Notification marked as read", data: null });
 });
 
+// ---------------------------------------------------------------------------
+// DELETE /api/notifications/:id
+// ---------------------------------------------------------------------------
+router.delete("/:id", authenticate, async (req: Request<{ id: string }>, res: Response) => {
+  await notificationsService.deleteNotification(req.user!.id, req.params.id);
+  res.status(200).json({ success: true, message: "Notification deleted", data: null });
+});
+
 export default router;
