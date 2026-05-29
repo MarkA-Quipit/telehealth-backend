@@ -39,7 +39,10 @@
     "seed:reviews": "tsx src/db/seeds/12-reviews.ts",
     "seed:ai-logs": "tsx src/db/seeds/13-ai-logs.ts",
     "seed:blocked-slots": "tsx src/db/seeds/14-blocked-slots.ts",
-    "seed:chat-messages": "tsx src/db/seeds/15-chat-messages.ts"
+    "seed:chat-messages": "tsx src/db/seeds/15-chat-messages.ts",
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
@@ -61,10 +64,15 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.1.0",
     "@types/node": "^25.9.1",
+    "@types/supertest": "^7.2.0",
     "drizzle-kit": "^0.31.10",
+    "jest": "^30.4.2",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.11",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3"
   }
