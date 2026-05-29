@@ -1,6 +1,6 @@
 # Additional Features — Work Tracking
 
-> Tracks all out-of-scope feature additions beyond the original MVP. Updated as of **2026-05-28**.
+> Tracks all out-of-scope feature additions beyond the original MVP. Updated as of **2026-05-29**.
 
 ---
 
@@ -45,66 +45,45 @@
 
 ---
 
+### AP1 — Reschedule Flow *(FULL)*
+
+Backend + frontend complete. `PATCH /api/appointments/:id/reschedule`. Frontend: `AppointmentDetailPage.tsx` reschedule dialog with date picker + slot grid, navigates to new appointment on success.
+
+---
+
+### P3 — Doctor View of Patient Medical History *(FULL)*
+
+`GET /api/patients/:patientId/history` (doctor-only). Frontend: `PatientMedicalHistoryPage.tsx` at `/doctor/patients/:patientId` + "View Full Patient History →" link in `DoctorAppointmentDetailPage.tsx`.
+
+---
+
+### D1 — Doctor Ratings UI *(FE)*
+
+`DoctorCard.tsx` — star rating + review count. `DoctorProfilePage.tsx` — average rating, star breakdown bars, full review list with patient name/avatar/date/comment. Empty state handled.
+
+---
+
+### D2 — Consultation Count on DoctorCard *(FE)*
+
+`DoctorCard.tsx` renders `completedConsultationsCount`. Hidden when zero.
+
+---
+
+### AI2 — Symptom Pre-fill to Booking *(FE)*
+
+`SymptomChecker.tsx` — compact doctor cards navigate to `/patient/appointments/book` with `{ state: { symptoms, doctorId } }`. `BookAppointmentPage.tsx` reads `location.state?.symptoms` as initial `reasonForVisit`.
+
+---
+
 ## 🔄 In Progress
 
-### AP1 — Reschedule Flow (Backend done, frontend pending)
-
-**Backend — Complete:**
-- `appointments.schema.ts` — added `rescheduleAppointmentSchema` (`newScheduledAt: z.iso.datetime()`, `durationMinutes?`) and `RescheduleAppointmentInput` type
-- `appointments.service.ts` — added `rescheduleAppointment()` method: validates patient ownership, checks non-terminal status, checks future time, checks conflict, transaction (cancel old + create new with `rescheduledFrom` link), fires notifications to both parties
-- `appointments.controller.ts` — added `PATCH /api/appointments/:id/reschedule` route
-
-**Frontend — In Progress (partially started):**
-- `appointments.api.ts` — added `rescheduleAppointment(id, dto)` API function ✓
-- `useAppointments.ts` — added `useRescheduleAppointment()` mutation hook ✓
-- `AppointmentDetailPage.tsx` — **NOT YET UPDATED**. Still uses old cancel+redirect pattern. Needs:
-  - Import fix: replace `@radix-ui/react-dialog` with `radix-ui`
-  - Import `useRescheduleAppointment` hook
-  - Replace reschedule dialog body with date input + slot picker
-  - On slot selected + confirm → call `reschedule.mutateAsync({ id, dto: { newScheduledAt } })`
-  - On success → navigate to new appointment (`/patient/appointments/{newAppt.id}`)
+*(none)*
 
 ---
 
 ## 📋 To Do
 
 Priority order matches the plan. Items marked **(BE)** = backend only, **(FE)** = frontend only, **(FULL)** = both.
-
----
-
-### AP1 — Reschedule frontend UI *(FE)* — **NEXT**
-
-Finish the `AppointmentDetailPage.tsx` reschedule dialog:
-- Fix import `@radix-ui/react-dialog` → use `radix-ui` Dialog or our `shared/ui/dialog.tsx`
-- Add state: `rescheduleDate` (string), `rescheduleSlot` (string)
-- Query: when `rescheduleDate` changes → `GET /api/doctors/:id/slots?date=rescheduleDate`
-- Show date input (`<input type="date">`) + slot grid buttons
-- Confirm button: disabled until slot selected → calls `useRescheduleAppointment`
-- Success: navigate to `/patient/appointments/${newAppt.id}`, toast "Appointment rescheduled"
-
----
-
-### D1 — Doctor Ratings UI *(FE)*
-
-Wiring that already exists in the backend (schema + API). Zero backend changes needed.
-
-- `DoctorCard.tsx` — show star rating + review count (data already returned in `GET /api/doctors`)
-- `DoctorProfilePage.tsx` (patient view) — show average rating + review list (`GET /api/doctors/:id/reviews`)
-- `AppointmentDetailPage.tsx` — review form already implemented via `LeaveReviewSection` ✓
-
----
-
-### D2 — Consultation Count on DoctorCard *(FE)*
-
-`GET /api/doctors` already returns `completedConsultationsCount`. Just render it in `DoctorCard.tsx`.
-
----
-
-### AI2 — Symptom Pre-fill to Booking *(FE)*
-
-When a patient clicks a doctor card from SymptomChecker results:
-- Pass `symptoms` string via React Router state: `navigate('/patient/appointments/book', { state: { symptoms, doctorId } })`
-- In `BookAppointmentPage.tsx`: read `location.state?.symptoms` and pre-fill the `reasonForVisit` input
 
 ---
 
