@@ -50,6 +50,20 @@
       "when": 1780041351519,
       "tag": "0006_wide_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780056030804,
+      "tag": "0007_curved_havok",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780056454986,
+      "tag": "0008_known_bloodaxe",
+      "breakpoints": true
     }
   ]
 }

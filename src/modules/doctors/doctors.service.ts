@@ -102,7 +102,10 @@ export const doctorsService = {
       }
     }
 
-    return doctorsRepository.setAvailability(doctorId, input.availability);
+    return doctorsRepository.setAvailability(
+      doctorId,
+      input.availability.map((slot) => ({ ...slot, slotDurationMinutes: slot.slotDurationMinutes ?? 30 })),
+    );
   },
 
   // ── getBlockedSlots ───────────────────────────────────────────────────────

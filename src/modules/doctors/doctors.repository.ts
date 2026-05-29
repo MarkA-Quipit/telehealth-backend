@@ -1,4 +1,4 @@
-import { eq, ilike, or, and, count, ne, gte, lte, avg, inArray } from "drizzle-orm";
+import { eq, ilike, or, and, count, ne, gte, lte, avg, inArray, sql } from "drizzle-orm";
 import { db } from "../../config/db";
 import { doctorProfiles, doctorAvailability, doctorBlockedSlots, reviews } from "./doctors.schema";
 import { users } from "../users/users.schema";
@@ -62,6 +62,7 @@ export interface DoctorAvailabilityReturn {
   startTime: string; // "HH:MM"
   endTime: string;   // "HH:MM"
   isAvailable: boolean;
+  slotDurationMinutes: number;
 }
 
 export interface BlockedSlotReturn {
@@ -71,6 +72,7 @@ export interface BlockedSlotReturn {
   startTime: string;   // "HH:MM"
   endTime: string;     // "HH:MM"
   reason: string | null;
+  recurrenceType: "none" | "weekly";
   createdAt: Date;
 }
 
@@ -82,6 +84,7 @@ function mapAvailRow(row: typeof doctorAvailability.$inferSelect): DoctorAvailab
     startTime: row.startTime.slice(0, 5), // "HH:MM:SS" → "HH:MM"
     endTime: row.endTime.slice(0, 5),
     isAvailable: row.isActive,
+    slotDurationMinutes: row.slotDurationMinutes ?? 30,
   };
 }
 
@@ -97,6 +100,7 @@ function mapBlockedRow(row: typeof doctorBlockedSlots.$inferSelect): BlockedSlot
     startTime: row.startTime.slice(0, 5),
     endTime: row.endTime.slice(0, 5),
     reason: row.reason ?? null,
+    recurrenceType: (row.recurrenceType === "weekly" ? "weekly" : "none"),
     createdAt: row.createdAt,
   };
 }
@@ -389,7 +393,7 @@ export const doctorsRepository = {
   // ── setAvailability — replace-all in a transaction ─────────────────────
   async setAvailability(
     doctorId: string,
-    slots: Array<{ dayOfWeek: number; startTime: string; endTime: string; isAvailable: boolean }>,
+    slots: Array<{ dayOfWeek: number; startTime: string; endTime: string; isAvailable: boolean; slotDurationMinutes?: number }>,
   ): Promise<DoctorAvailabilityReturn[]> {
     return db.transaction(async (tx) => {
       // 1. Delete all existing rows for this doctor
@@ -409,6 +413,7 @@ export const doctorsRepository = {
             startTime: slot.startTime,
             endTime: slot.endTime,
             isActive: slot.isAvailable,
+            slotDurationMinutes: slot.slotDurationMinutes ?? 30,
           })),
         )
         .returning();
@@ -458,7 +463,7 @@ export const doctorsRepository = {
   // ── addBlockedSlot ────────────────────────────────────────────────────────
   async addBlockedSlot(
     doctorId: string,
-    data: { blockedDate: string; startTime: string; endTime: string; reason?: string },
+    data: { blockedDate: string; startTime: string; endTime: string; reason?: string; recurrenceType?: "none" | "weekly" },
   ): Promise<BlockedSlotReturn> {
     // Store the date as midnight UTC
     const blockedDate = new Date(`${data.blockedDate}T00:00:00.000Z`);
@@ -471,6 +476,7 @@ export const doctorsRepository = {
         startTime: data.startTime,
         endTime: data.endTime,
         reason: data.reason ?? null,
+        recurrenceType: data.recurrenceType ?? "none",
       })
       .returning();
 
@@ -552,15 +558,25 @@ export const doctorsRepository = {
       });
     });
 
-    // 6. Fetch blocked slots for this doctor on this date
+    // 6. Fetch blocked slots for this doctor on this date (one-time OR weekly-recurring same DOW)
     const blockedSlots = await db
       .select({ startTime: doctorBlockedSlots.startTime, endTime: doctorBlockedSlots.endTime })
       .from(doctorBlockedSlots)
       .where(
         and(
           eq(doctorBlockedSlots.doctorId, doctorId),
-          gte(doctorBlockedSlots.blockedDate, dateStart),
-          lte(doctorBlockedSlots.blockedDate, dateEnd),
+          or(
+            // one-time block on this exact date
+            and(
+              gte(doctorBlockedSlots.blockedDate, dateStart),
+              lte(doctorBlockedSlots.blockedDate, dateEnd),
+            ),
+            // weekly-recurring block whose day-of-week matches targetDate
+            and(
+              eq(doctorBlockedSlots.recurrenceType, "weekly"),
+              sql`EXTRACT(DOW FROM ${doctorBlockedSlots.blockedDate}) = EXTRACT(DOW FROM ${date}::date)`,
+            ),
+          ),
         ),
       );
 

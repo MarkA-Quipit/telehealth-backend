@@ -1,0 +1,1 @@
+ALTER TABLE "doctor_blocked_slots" ADD COLUMN "recurrence_type" varchar(10) DEFAULT 'none' NOT NULL;

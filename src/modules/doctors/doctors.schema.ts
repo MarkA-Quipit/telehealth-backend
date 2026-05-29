@@ -98,6 +98,7 @@ export const doctorBlockedSlots = pgTable("doctor_blocked_slots", {
   startTime: time("start_time").notNull(),
   endTime: time("end_time").notNull(),
   reason: text("reason"),                                  // optional note for doctor's own reference
+  recurrenceType: varchar("recurrence_type", { length: 10 }).notNull().default("none"),
 
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -172,6 +173,7 @@ export const setAvailabilitySchema = z.object({
       startTime: z.string().regex(/^\d{2}:\d{2}$/),
       endTime: z.string().regex(/^\d{2}:\d{2}$/),
       isAvailable: z.boolean(),
+      slotDurationMinutes: z.number().int().min(15).max(60).optional(),
     }),
   ),
 });
@@ -181,6 +183,7 @@ export const blockSlotSchema = z.object({
   startTime: z.string().regex(/^\d{2}:\d{2}$/),
   endTime: z.string().regex(/^\d{2}:\d{2}$/),
   reason: z.string().max(200).optional(),
+  recurrenceType: z.enum(["none", "weekly"]).optional(),
 });
 
 export const createReviewSchema = z.object({
