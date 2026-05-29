@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { eq, and, isNull, gt } from "drizzle-orm";
 import { db, type DrizzleTx } from "../../config/db";
 import { users } from "../users/users.schema";
-import { roles, userRoles } from "./auth.schema";
+import { roles, userRoles, refreshTokens } from "./auth.schema";
 import { patientProfiles } from "../patients/patients.schema";
 import { doctorProfiles } from "../doctors/doctors.schema";
 
@@ -131,5 +131,41 @@ export const authRepository = {
       .update(users)
       .set({ lastLoginAt: new Date(), updatedAt: new Date() })
       .where(eq(users.id, userId));
+  },
+
+  // ---------------------------------------------------------------------------
+  // Refresh token management
+  // ---------------------------------------------------------------------------
+  async storeRefreshToken(userId: string, tokenHash: string, expiresAt: Date) {
+    await db.insert(refreshTokens).values({ userId, tokenHash, expiresAt });
+  },
+
+  async findRefreshToken(tokenHash: string) {
+    const result = await db
+      .select()
+      .from(refreshTokens)
+      .where(
+        and(
+          eq(refreshTokens.tokenHash, tokenHash),
+          isNull(refreshTokens.revokedAt),
+          gt(refreshTokens.expiresAt, new Date()),
+        ),
+      )
+      .limit(1);
+    return result[0] ?? null;
+  },
+
+  async revokeRefreshToken(id: string) {
+    await db
+      .update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(eq(refreshTokens.id, id));
+  },
+
+  async revokeAllRefreshTokens(userId: string) {
+    await db
+      .update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt)));
   },
 };

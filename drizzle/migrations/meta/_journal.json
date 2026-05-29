@@ -22,6 +22,34 @@
       "when": 1779955462733,
       "tag": "0002_fair_hitman",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780039793403,
+      "tag": "0003_colorful_sumo",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780040875740,
+      "tag": "0004_familiar_princess_powerful",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780041177161,
+      "tag": "0005_minor_jasper_sitwell",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780041351519,
+      "tag": "0006_wide_karnak",
+      "breakpoints": true
     }
   ]
 }

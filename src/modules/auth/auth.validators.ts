@@ -38,6 +38,13 @@ export const loginSchema = z.object({
 export type LoginInput = z.infer<typeof loginSchema>;
 
 // ---------------------------------------------------------------------------
+// Refresh / Logout body
+// ---------------------------------------------------------------------------
+export const refreshTokenBodySchema = z.object({
+  refreshToken: z.string().min(1),
+});
+
+// ---------------------------------------------------------------------------
 // JWT Payload (what we encode inside the token)
 // ---------------------------------------------------------------------------
 export interface JwtPayload {

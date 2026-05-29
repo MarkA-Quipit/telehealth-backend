@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { db } from "../../config/db";
@@ -7,7 +8,8 @@ import type { RegisterInput, LoginInput, JwtPayload } from "./auth.validators";
 import { env } from "../../config/env";
 
 const JWT_SECRET = env.JWT_SECRET;
-const JWT_EXPIRES_IN = env.JWT_EXPIRES_IN;
+const ACCESS_TOKEN_EXPIRES = "15m";
+const REFRESH_TOKEN_EXPIRES_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 const BCRYPT_ROUNDS = 12;
 
@@ -55,11 +57,12 @@ export const authService = {
     // 4. Fetch roles for JWT (transaction committed, data is visible)
     const userRoles = await authRepository.getUserRoles(user.id);
 
-    // 5. Sign JWT
-    const token = signToken({ sub: user.id, email: user.email, roles: userRoles });
+    // 5. Issue token pair
+    const { accessToken, refreshToken } = await issueTokenPair(user.id, user.email, userRoles);
 
     return {
-      token,
+      accessToken,
+      refreshToken,
       user: sanitizeUser(user, userRoles),
     };
   },
@@ -91,13 +94,49 @@ export const authService = {
     // 5. Fetch roles for token
     const userRoles = await authRepository.getUserRoles(user.id);
 
-    // 6. Sign JWT
-    const token = signToken({ sub: user.id, email: user.email, roles: userRoles });
+    // 6. Issue token pair
+    const { accessToken, refreshToken } = await issueTokenPair(user.id, user.email, userRoles);
 
     return {
-      token,
+      accessToken,
+      refreshToken,
       user: sanitizeUser(user, userRoles),
     };
+  },
+
+  // ---------------------------------------------------------------------------
+  // Refresh — exchange a valid refresh token for a new 15-min access token
+  // ---------------------------------------------------------------------------
+  async refresh(rawRefreshToken: string) {
+    const tokenHash = crypto.createHash("sha256").update(rawRefreshToken).digest("hex");
+    const stored = await authRepository.findRefreshToken(tokenHash);
+    if (!stored) throw new AppError("Invalid or expired refresh token", 401);
+
+    const user = await authRepository.findById(stored.userId);
+    if (!user) throw new AppError("User not found", 401);
+
+    const userRoles = await authRepository.getUserRoles(user.id);
+    const accessToken = signToken({ sub: user.id, email: user.email, roles: userRoles });
+
+    return { accessToken };
+  },
+
+  // ---------------------------------------------------------------------------
+  // Logout all — revoke every refresh token for this user
+  // ---------------------------------------------------------------------------
+  async logoutAll(userId: string) {
+    await authRepository.revokeAllRefreshTokens(userId);
+  },
+
+  // ---------------------------------------------------------------------------
+  // Logout — revoke the refresh token (best-effort; no error if already gone)
+  // ---------------------------------------------------------------------------
+  async logout(userId: string, rawRefreshToken: string) {
+    const tokenHash = crypto.createHash("sha256").update(rawRefreshToken).digest("hex");
+    const stored = await authRepository.findRefreshToken(tokenHash);
+    if (stored && stored.userId === userId) {
+      await authRepository.revokeRefreshToken(stored.id);
+    }
   },
 
   // ---------------------------------------------------------------------------
@@ -112,7 +151,16 @@ export const authService = {
 // Helpers
 // ---------------------------------------------------------------------------
 function signToken(payload: Omit<JwtPayload, "iat" | "exp">): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions);
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES } as jwt.SignOptions);
+}
+
+async function issueTokenPair(userId: string, email: string, userRoles: string[]) {
+  const accessToken = signToken({ sub: userId, email, roles: userRoles });
+  const rawRefreshToken = crypto.randomBytes(32).toString("hex");
+  const tokenHash = crypto.createHash("sha256").update(rawRefreshToken).digest("hex");
+  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRES_MS);
+  await authRepository.storeRefreshToken(userId, tokenHash, expiresAt);
+  return { accessToken, refreshToken: rawRefreshToken };
 }
 
 function sanitizeUser(
