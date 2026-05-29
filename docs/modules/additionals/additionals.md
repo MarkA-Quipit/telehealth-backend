@@ -233,6 +233,15 @@ Calculate `(endsAt - scheduledAt)` in minutes. Show "30-min session" badge in:
 
 ---
 
+### P3 — Doctor View of Patient Medical History *(FULL)*
+
+New `GET /api/patients/:patientId/history` endpoint (doctor-only) + frontend page `/doctor/patients/:patientId`.
+
+- **Backend:** `getPatientHistory` in repository (batch-selects completed appointments + consultation_notes + prescriptions) + service + controller. Register route **before** `GET /:id` to avoid param collision.
+- **Frontend:** `PatientMedicalHistoryPage.tsx` — patient medical profile card + reverse-chronological consultation history with notes and prescriptions. Add "View Patient History" link in `DoctorAppointmentDetailPage.tsx`. New route in doctor routes.
+
+---
+
 ### AI3 — Streaming AI Response *(FULL)*
 
 - **Backend:** Switch `ai.service.ts` from `groq.chat.completions.create()` to streaming version. Stream via SSE (`Content-Type: text/event-stream`). Controller sets appropriate headers and streams tokens.

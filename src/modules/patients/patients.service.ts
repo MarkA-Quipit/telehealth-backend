@@ -17,6 +17,42 @@ export const patientsService = {
     return patient;
   },
 
+  // ── getPatientHistory ─────────────────────────────────────────────────────
+  async getPatientHistory(requesterId: string, patientId: string) {
+    const patient = await patientsRepository.findById(patientId);
+    if (!patient) throw new AppError("Patient not found", 404);
+
+    const { appointments, notesByApptId, rxByApptId } =
+      await patientsRepository.getPatientHistory(patientId);
+
+    const consultationHistory = appointments.map((appt) => {
+      const note = notesByApptId[appt.id] ?? null;
+      const rxList = rxByApptId[appt.id] ?? [];
+      return {
+        appointmentId: appt.id,
+        scheduledAt: appt.scheduledAt,
+        notes: note
+          ? {
+              chiefComplaint: note.chiefComplaint ?? null,
+              diagnosis: note.diagnosis ?? null,
+              notes: note.notes ?? null,
+              followUpDate: note.followUpDate ?? null,
+            }
+          : null,
+        prescriptions: rxList.map((rx) => ({
+          id: rx.id,
+          medicationName: rx.medicationName,
+          dosage: rx.dosage ?? null,
+          frequency: rx.frequency ?? null,
+          duration: rx.duration ?? null,
+          instructions: rx.instructions ?? null,
+        })),
+      };
+    });
+
+    return { patient, consultationHistory };
+  },
+
   // ── updatePatientProfile ──────────────────────────────────────────────────
   async updatePatientProfile(
     requesterId: string,

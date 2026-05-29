@@ -1,7 +1,10 @@
-import { eq } from "drizzle-orm";
+import { eq, and, inArray, desc } from "drizzle-orm";
 import { db } from "../../config/db";
 import { patientProfiles } from "./patients.schema";
 import { users } from "../users/users.schema";
+import { appointments } from "../appointments/appointments.schema";
+import { consultationNotes } from "../consultations/consultations.schema";
+import { prescriptions } from "../prescriptions/prescriptions.schema";
 import type { UpdatePatientInput } from "./patients.schema";
 
 // ---------------------------------------------------------------------------
@@ -85,6 +88,45 @@ export const patientsRepository = {
 
     if (!rows[0]) return null;
     return mapRow(rows[0].patient_profiles, rows[0].users);
+  },
+
+  // ── getPatientHistory ─────────────────────────────────────────────────────
+  async getPatientHistory(patientId: string) {
+    const apptRows = await db
+      .select()
+      .from(appointments)
+      .where(and(eq(appointments.patientId, patientId), eq(appointments.status, "completed")))
+      .orderBy(desc(appointments.scheduledAt));
+
+    if (apptRows.length === 0) {
+      return {
+        appointments: [],
+        notesByApptId: {} as Record<string, typeof consultationNotes.$inferSelect>,
+        rxByApptId: {} as Record<string, Array<typeof prescriptions.$inferSelect>>,
+      };
+    }
+
+    const ids = apptRows.map((a) => a.id);
+
+    const [noteRows, rxRows] = await Promise.all([
+      db.select().from(consultationNotes).where(inArray(consultationNotes.appointmentId, ids)),
+      db
+        .select()
+        .from(prescriptions)
+        .where(inArray(prescriptions.appointmentId, ids))
+        .orderBy(prescriptions.createdAt),
+    ]);
+
+    const notesByApptId = Object.fromEntries(noteRows.map((n) => [n.appointmentId, n]));
+    const rxByApptId = rxRows.reduce<Record<string, Array<typeof prescriptions.$inferSelect>>>(
+      (acc, rx) => {
+        (acc[rx.appointmentId] ??= []).push(rx);
+        return acc;
+      },
+      {},
+    );
+
+    return { appointments: apptRows, notesByApptId, rxByApptId };
   },
 
   // ── upsert ────────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { and, eq, lt, gt, ne, count, desc } from "drizzle-orm";
+import { and, eq, lt, gt, ne, count, countDistinct, desc, ilike, or, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { db } from "../../config/db";
 import type { DrizzleTx } from "../../config/db";
@@ -44,6 +44,40 @@ export interface AppointmentWithDetails {
 
 export interface ListFilters {
   status?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface PatientSearchResult {
+  id: string;
+  userId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  dateOfBirth: string | null;
+  sex: string | null;
+  bloodType: string | null;
+  allergies: string | null;
+  currentMedications: string | null;
+  pastMedicalConditions: string | null;
+  familyMedicalHistory: string | null;
+  profilePictureUrl: string | null;
+  consultationCount: number;
+}
+
+export interface PatientSearchResults {
+  items: PatientSearchResult[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface PatientSearchFilters {
+  q?: string;
+  bloodType?: "A+" | "A-" | "B+" | "B-" | "AB+" | "AB-" | "O+" | "O-" | "unknown";
+  sex?: "male" | "female" | "other" | "prefer_not_to_say";
+  minConsultations?: number;
   page?: number;
   limit?: number;
 }
@@ -278,6 +312,148 @@ export const appointmentsRepository = {
       .where(eq(appointments.id, id))
       .returning();
     return result[0];
+  },
+
+  // ── searchPatients ────────────────────────────────────────────────────────
+  // Returns distinct patients (grouped) that have at least one appointment with
+  // this doctor and match the given filters. consultationCount = completed appts.
+  async searchPatients(
+    doctorId: string,
+    filters: PatientSearchFilters,
+  ): Promise<PatientSearchResults> {
+    const page = Math.max(1, filters.page ?? 1);
+    const limit = Math.min(50, filters.limit ?? 20);
+    const offset = (page - 1) * limit;
+
+    // Build WHERE conditions
+    const conditions = [eq(appointments.doctorId, doctorId)];
+
+    if (filters.q && filters.q.trim().length >= 2) {
+      const pattern = `%${filters.q.trim()}%`;
+      conditions.push(or(
+        ilike(patientProfiles.firstName, pattern),
+        ilike(patientProfiles.lastName, pattern),
+        ilike(users.email, pattern),
+        ilike(patientProfiles.allergies, pattern),
+        ilike(patientProfiles.currentMedications, pattern),
+        ilike(patientProfiles.pastMedicalConditions, pattern),
+        ilike(patientProfiles.familyMedicalHistory, pattern),
+      )!);
+    }
+
+    if (filters.bloodType) {
+      conditions.push(eq(patientProfiles.bloodType, filters.bloodType));
+    }
+
+    if (filters.sex) {
+      conditions.push(eq(patientProfiles.sex, filters.sex));
+    }
+
+    const baseWhere = and(...conditions);
+
+    // Count of completed appointments per patient with this doctor
+    const completedCount = sql<number>`cast(count(case when ${appointments.status} = 'completed' then 1 end) as int)`;
+
+    const selectFields = {
+      id: patientProfiles.id,
+      userId: patientProfiles.userId,
+      firstName: patientProfiles.firstName,
+      lastName: patientProfiles.lastName,
+      email: users.email,
+      dateOfBirth: patientProfiles.dateOfBirth,
+      sex: patientProfiles.sex,
+      bloodType: patientProfiles.bloodType,
+      allergies: patientProfiles.allergies,
+      currentMedications: patientProfiles.currentMedications,
+      pastMedicalConditions: patientProfiles.pastMedicalConditions,
+      familyMedicalHistory: patientProfiles.familyMedicalHistory,
+      profilePictureUrl: patientProfiles.profilePictureUrl,
+      consultationCount: completedCount,
+    };
+
+    // GROUP BY all selected non-aggregate columns to deduplicate patients
+    const afterGroupBy = db
+      .select(selectFields)
+      .from(appointments)
+      .innerJoin(patientProfiles, eq(appointments.patientId, patientProfiles.id))
+      .innerJoin(users, eq(patientProfiles.userId, users.id))
+      .where(baseWhere)
+      .groupBy(
+        patientProfiles.id,
+        patientProfiles.userId,
+        patientProfiles.firstName,
+        patientProfiles.lastName,
+        users.email,
+        patientProfiles.dateOfBirth,
+        patientProfiles.sex,
+        patientProfiles.bloodType,
+        patientProfiles.allergies,
+        patientProfiles.currentMedications,
+        patientProfiles.pastMedicalConditions,
+        patientProfiles.familyMedicalHistory,
+        patientProfiles.profilePictureUrl,
+      );
+
+    const havingClause = sql`cast(count(case when ${appointments.status} = 'completed' then 1 end) as int) >= ${filters.minConsultations}`;
+
+    const [rows, countResult] = await Promise.all([
+      filters.minConsultations != null
+        ? afterGroupBy
+            .having(havingClause)
+            .orderBy(patientProfiles.firstName, patientProfiles.lastName)
+            .limit(limit)
+            .offset(offset)
+        : afterGroupBy
+            .orderBy(patientProfiles.firstName, patientProfiles.lastName)
+            .limit(limit)
+            .offset(offset),
+
+      filters.minConsultations != null
+        ? db
+            .select({ id: patientProfiles.id })
+            .from(appointments)
+            .innerJoin(patientProfiles, eq(appointments.patientId, patientProfiles.id))
+            .innerJoin(users, eq(patientProfiles.userId, users.id))
+            .where(baseWhere)
+            .groupBy(patientProfiles.id)
+            .having(havingClause)
+            .then((r) => [{ total: r.length }] as const)
+        : db
+            .select({ total: countDistinct(patientProfiles.id) })
+            .from(appointments)
+            .innerJoin(patientProfiles, eq(appointments.patientId, patientProfiles.id))
+            .innerJoin(users, eq(patientProfiles.userId, users.id))
+            .where(baseWhere),
+    ]);
+
+    const total = Number(countResult[0]?.total ?? 0);
+
+    // Drizzle v0.45 doesn't propagate sql<T> through groupBy chain — cast to recover the field
+    type RowWithCount = typeof rows[number] & { consultationCount: number };
+    const typedRows = rows as RowWithCount[];
+
+    return {
+      items: typedRows.map((r) => ({
+        id: r.id,
+        userId: r.userId,
+        firstName: r.firstName,
+        lastName: r.lastName,
+        email: r.email,
+        dateOfBirth: r.dateOfBirth ?? null,
+        sex: r.sex ?? null,
+        bloodType: r.bloodType ?? null,
+        allergies: r.allergies ?? null,
+        currentMedications: r.currentMedications ?? null,
+        pastMedicalConditions: r.pastMedicalConditions ?? null,
+        familyMedicalHistory: r.familyMedicalHistory ?? null,
+        profilePictureUrl: r.profilePictureUrl ?? null,
+        consultationCount: r.consultationCount ?? 0,
+      })),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   },
 
   // ── checkConflict ─────────────────────────────────────────────────────────

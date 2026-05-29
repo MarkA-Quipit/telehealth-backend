@@ -8,6 +8,7 @@ import { randomUUID } from "crypto";
 import { eq } from "drizzle-orm";
 import { appointments } from "./appointments.schema";
 import type { CreateAppointmentInput, UpdateStatusInput, CancelAppointmentInput, RescheduleAppointmentInput } from "./appointments.schema";
+import type { PatientSearchFilters } from "./appointments.repository";
 
 // ---------------------------------------------------------------------------
 // Valid status transitions
@@ -286,6 +287,22 @@ export const appointmentsService = {
     }
 
     return full;
+  },
+
+  // ── searchPatients — doctor only ─────────────────────────────────────────
+  async searchPatients(
+    requesterId: string,
+    requesterRoles: string[],
+    filters: PatientSearchFilters,
+  ) {
+    if (!requesterRoles.includes("doctor")) {
+      throw new AppError("Only doctors can search patients", 403);
+    }
+
+    const doctorProfile = await doctorsRepository.findByUserId(requesterId);
+    if (!doctorProfile) throw new AppError("Doctor profile not found", 404);
+
+    return appointmentsRepository.searchPatients(doctorProfile.id, filters);
   },
 
   // ── cancelAppointment — either role ───────────────────────────────────────

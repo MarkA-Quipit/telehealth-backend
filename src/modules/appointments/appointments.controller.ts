@@ -1,12 +1,13 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
-import { authenticate } from "../../shared/middleware/auth.middleware";
+import { authenticate, requireRole } from "../../shared/middleware/auth.middleware";
 import { appointmentsService } from "./appointments.service";
 import {
   createAppointmentSchema,
   updateStatusSchema,
   cancelAppointmentSchema,
   rescheduleAppointmentSchema,
+  searchPatientsSchema,
 } from "./appointments.schema";
 
 const router = Router();
@@ -35,6 +36,30 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
   );
   res.status(200).json({ success: true, message: "Appointments retrieved", data: result });
 });
+
+// ---------------------------------------------------------------------------
+// GET /api/appointments/patients/search?q=<keyword>&page=1&limit=20
+// Doctor-only: returns paginated patients matched by keyword across their
+// medical profile fields (allergies, medications, conditions, name, etc.)
+// MUST be registered before /:id — otherwise "patients" is treated as an ID
+// ---------------------------------------------------------------------------
+router.get(
+  "/patients/search",
+  authenticate,
+  requireRole("doctor"),
+  async (req: Request, res: Response) => {
+    const { q, bloodType, sex, minConsultations } = searchPatientsSchema.parse(req.query);
+    const page = Number(req.query.page) || 1;
+    const limit = Math.min(50, Number(req.query.limit) || 20);
+
+    const result = await appointmentsService.searchPatients(
+      req.user!.id,
+      req.user!.roles,
+      { q, bloodType, sex, minConsultations, page, limit },
+    );
+    res.status(200).json({ success: true, message: "Patients retrieved", data: result });
+  },
+);
 
 // ---------------------------------------------------------------------------
 // GET /api/appointments/:id

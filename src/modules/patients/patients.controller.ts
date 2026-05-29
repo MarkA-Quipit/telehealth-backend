@@ -1,10 +1,23 @@
 import { Router } from "express";
 import type { Response, Request } from "express";
-import { authenticate } from "../../shared/middleware/auth.middleware";
+import { authenticate, requireRole } from "../../shared/middleware/auth.middleware";
 import { patientsService } from "./patients.service";
 import { updatePatientSchema } from "./patients.schema";
 
 const router = Router();
+
+// ---------------------------------------------------------------------------
+// GET /api/patients/:patientId/history  (doctor-only)
+// ---------------------------------------------------------------------------
+router.get(
+  "/:patientId/history",
+  authenticate,
+  requireRole("doctor"),
+  async (req: Request<{ patientId: string }>, res: Response) => {
+    const result = await patientsService.getPatientHistory(req.user!.id, req.params.patientId);
+    res.status(200).json({ success: true, message: "Patient history retrieved", data: result });
+  },
+);
 
 // ---------------------------------------------------------------------------
 // GET /api/patients/:id
