@@ -8,6 +8,7 @@ import {
   cancelAppointmentSchema,
   rescheduleAppointmentSchema,
   searchPatientsSchema,
+  sendChatMessageSchema,
 } from "./appointments.schema";
 
 const router = Router();
@@ -60,6 +61,33 @@ router.get(
     res.status(200).json({ success: true, message: "Patients retrieved", data: result });
   },
 );
+
+// ---------------------------------------------------------------------------
+// GET /api/appointments/:id/calendar  — download .ics file
+// ---------------------------------------------------------------------------
+router.get("/:id/calendar", authenticate, async (req: Request<{ id: string }>, res: Response) => {
+  const ics = await appointmentsService.generateIcsContent(req.params.id, req.user!.id);
+  res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="appointment-${req.params.id}.ics"`);
+  res.send(ics);
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/appointments/:id/chat  — send a chat message
+// ---------------------------------------------------------------------------
+router.post("/:id/chat", authenticate, async (req: Request<{ id: string }>, res: Response) => {
+  const { message } = sendChatMessageSchema.parse(req.body);
+  const result = await appointmentsService.sendChatMessage(req.params.id, req.user!.id, message);
+  res.status(201).json({ success: true, message: "Message sent", data: result });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/appointments/:id/chat  — load chat history
+// ---------------------------------------------------------------------------
+router.get("/:id/chat", authenticate, async (req: Request<{ id: string }>, res: Response) => {
+  const history = await appointmentsService.getChatHistory(req.params.id, req.user!.id);
+  res.status(200).json({ success: true, message: "Chat history retrieved", data: history });
+});
 
 // ---------------------------------------------------------------------------
 // GET /api/appointments/:id

@@ -2,7 +2,7 @@ import { and, eq, lt, gt, ne, count, countDistinct, desc, ilike, or, sql } from 
 import { randomUUID } from "crypto";
 import { db } from "../../config/db";
 import type { DrizzleTx } from "../../config/db";
-import { appointments } from "./appointments.schema";
+import { appointments, chatMessages } from "./appointments.schema";
 import { patientProfiles } from "../patients/patients.schema";
 import { doctorProfiles } from "../doctors/doctors.schema";
 import { users } from "../users/users.schema";
@@ -478,5 +478,23 @@ export const appointmentsRepository = {
       );
 
     return conflicts.length > 0;
+  },
+
+  // ── saveChatMessage ───────────────────────────────────────────────────────
+  async saveChatMessage(appointmentId: string, senderId: string, message: string) {
+    const result = await db
+      .insert(chatMessages)
+      .values({ appointmentId, senderId, message })
+      .returning();
+    return result[0];
+  },
+
+  // ── getChatMessages ───────────────────────────────────────────────────────
+  async getChatMessages(appointmentId: string) {
+    return db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.appointmentId, appointmentId))
+      .orderBy(chatMessages.sentAt);
   },
 };

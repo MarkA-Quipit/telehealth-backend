@@ -4,6 +4,7 @@ import { appointmentsRepository } from "./appointments.repository";
 import { patientsRepository } from "../patients/patients.repository";
 import { doctorsRepository } from "../doctors/doctors.repository";
 import { notificationsService } from "../notifications/notifications.service";
+import { pusher } from "../../config/pusher";
 import { randomUUID } from "crypto";
 import { eq } from "drizzle-orm";
 import { appointments } from "./appointments.schema";
@@ -367,4 +368,73 @@ export const appointmentsService = {
 
     return full;
   },
+
+  // ── sendChatMessage — patient or doctor ──────────────────────────────────
+  async sendChatMessage(appointmentId: string, userId: string, message: string) {
+    const appointment = await appointmentsRepository.findById(appointmentId);
+    if (!appointment) throw new AppError("Appointment not found", 404);
+
+    const isPatient = appointment.patient.userId === userId;
+    const isDoctor  = appointment.doctor.userId  === userId;
+    if (!isPatient && !isDoctor) throw new AppError("Forbidden", 403);
+
+    const saved = await appointmentsRepository.saveChatMessage(appointmentId, userId, message);
+
+    pusher.trigger(`consultation-${appointmentId}`, "new_message", {
+      id: saved.id,
+      senderId: userId,
+      message,
+      sentAt: saved.sentAt.toISOString(),
+    }).catch((err: unknown) => console.error("[pusher] chat:", err));
+
+    return saved;
+  },
+
+  // ── getChatHistory — patient or doctor ────────────────────────────────────
+  async getChatHistory(appointmentId: string, userId: string) {
+    const appointment = await appointmentsRepository.findById(appointmentId);
+    if (!appointment) throw new AppError("Appointment not found", 404);
+
+    const isPatient = appointment.patient.userId === userId;
+    const isDoctor  = appointment.doctor.userId  === userId;
+    if (!isPatient && !isDoctor) throw new AppError("Forbidden", 403);
+
+    return appointmentsRepository.getChatMessages(appointmentId);
+  },
+
+  // ── generateIcsContent — patient or doctor ────────────────────────────────
+  async generateIcsContent(appointmentId: string, userId: string): Promise<string> {
+    const appointment = await appointmentsRepository.findById(appointmentId);
+    if (!appointment) throw new AppError("Appointment not found", 404);
+
+    const isPatient = appointment.patient.userId === userId;
+    const isDoctor  = appointment.doctor.userId  === userId;
+    if (!isPatient && !isDoctor) throw new AppError("Forbidden", 403);
+
+    const now = toIcsDate(new Date());
+    const start = toIcsDate(new Date(appointment.scheduledAt));
+    const end   = toIcsDate(new Date(appointment.endsAt));
+
+    return [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//TeleHealth//EN",
+      "BEGIN:VEVENT",
+      `UID:${appointmentId}@telehealth`,
+      `DTSTAMP:${now}`,
+      `DTSTART:${start}`,
+      `DTEND:${end}`,
+      `SUMMARY:Telehealth Consultation with Dr. ${appointment.doctor.lastName}`,
+      `DESCRIPTION:Room: ${appointmentId}`,
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+  },
 };
+
+// ---------------------------------------------------------------------------
+// ICS date helper — "YYYYMMDDTHHmmssZ"
+// ---------------------------------------------------------------------------
+function toIcsDate(date: Date): string {
+  return date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+}

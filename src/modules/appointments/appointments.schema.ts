@@ -6,7 +6,6 @@ import {
   timestamp,
   pgEnum,
 } from "drizzle-orm/pg-core";
-// Note: notifications table moved to notifications.schema.ts
 import { relations } from "drizzle-orm";
 import { z } from "zod/v4";
 import { doctorProfiles } from "../doctors/doctors.schema";
@@ -62,6 +61,21 @@ export const appointments = pgTable("appointments", {
 // ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// chat_messages
+// ---------------------------------------------------------------------------
+export const chatMessages = pgTable("chat_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  appointmentId: uuid("appointment_id")
+    .notNull()
+    .references(() => appointments.id, { onDelete: "cascade" }),
+  senderId: uuid("sender_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  message: text("message").notNull(),
+  sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const appointmentsRelations = relations(appointments, ({ one }) => ({
   patient: one(patientProfiles, {
     fields: [appointments.patientId],
@@ -80,6 +94,12 @@ export const appointmentsRelations = relations(appointments, ({ one }) => ({
 // ---------------------------------------------------------------------------
 // Zod validators
 // ---------------------------------------------------------------------------
+export const sendChatMessageSchema = z.object({
+  message: z.string().min(1).max(2000),
+});
+
+export type SendChatMessageInput = z.infer<typeof sendChatMessageSchema>;
+
 export const createAppointmentSchema = z.object({
   doctorId: z.uuid(),
   scheduledAt: z.iso.datetime(),               // ISO UTC, must be future (checked in service)
