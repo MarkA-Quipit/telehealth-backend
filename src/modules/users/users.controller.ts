@@ -3,7 +3,7 @@ import type { Response } from "express";
 import multer from "multer";
 import { authenticate } from "../../shared/middleware/auth.middleware";
 import { usersService } from "./users.service";
-import { updateUserSchema } from "./users.schema";
+import { updateUserSchema, changePasswordSchema } from "./users.schema";
 import type { Request } from "express";
 
 const router = Router();
@@ -61,5 +61,14 @@ router.post(
     res.status(200).json({ success: true, message: "Avatar uploaded", data: user });
   },
 );
+
+// ---------------------------------------------------------------------------
+// POST /api/users/:id/change-password
+// ---------------------------------------------------------------------------
+router.post("/:id/change-password", authenticate, async (req: Request<{ id: string }>, res: Response) => {
+  const body = changePasswordSchema.parse(req.body);
+  await usersService.changePassword(req.user!.id, req.params.id, body.currentPassword, body.newPassword);
+  res.status(200).json({ success: true, message: "Password updated successfully", data: null });
+});
 
 export default router;

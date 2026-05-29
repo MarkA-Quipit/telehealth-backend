@@ -129,6 +129,24 @@ export const usersRepository = {
     return buildUserWithProfile(user[0]);
   },
 
+  // ── findPasswordHash ──────────────────────────────────────────────────────
+  async findPasswordHash(id: string): Promise<string | null> {
+    const result = await db
+      .select({ passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
+    return result[0]?.passwordHash ?? null;
+  },
+
+  // ── updatePasswordHash ────────────────────────────────────────────────────
+  async updatePasswordHash(id: string, hash: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ passwordHash: hash, updatedAt: new Date() })
+      .where(eq(users.id, id));
+  },
+
   // ── findRoleByName ────────────────────────────────────────────────────────
   async findRoleByName(name: string) {
     const result = await db

@@ -1,3 +1,4 @@
+import bcrypt from "bcryptjs";
 import { AppError } from "../../shared/types";
 import { usersRepository } from "./users.repository";
 import { uploadAvatarBuffer } from "../../config/cloudinary";
@@ -21,6 +22,24 @@ export const usersService = {
     if (!existing) throw new AppError("User not found", 404);
 
     return usersRepository.updateById(targetId, data);
+  },
+
+  // ── changePassword ────────────────────────────────────────────────────────
+  async changePassword(requesterId: string, userId: string, currentPassword: string, newPassword: string): Promise<void> {
+    if (requesterId !== userId) throw new AppError("Forbidden", 403);
+
+    const hash = await usersRepository.findPasswordHash(userId);
+    if (!hash) throw new AppError("User not found", 404);
+
+    const isValid = await bcrypt.compare(currentPassword, hash);
+    if (!isValid) throw new AppError("Current password is incorrect", 400);
+
+    if (newPassword === currentPassword) {
+      throw new AppError("New password must be different from current password", 400);
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await usersRepository.updatePasswordHash(userId, newHash);
   },
 
   // ── uploadAvatar ──────────────────────────────────────────────────────────
