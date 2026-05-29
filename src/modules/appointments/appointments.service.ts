@@ -430,6 +430,27 @@ export const appointmentsService = {
       "END:VCALENDAR",
     ].join("\r\n");
   },
+
+  // ── joinConsultation ──────────────────────────────────────────────────────
+  async joinConsultation(appointmentId: string, userId: string) {
+    const appointment = await appointmentsRepository.findById(appointmentId);
+    if (!appointment) throw new AppError("Appointment not found", 404);
+
+    const isPatient = appointment.patient.userId === userId;
+    const isDoctor  = appointment.doctor.userId  === userId;
+    if (!isPatient && !isDoctor) throw new AppError("Not authorized", 403);
+
+    const role: "patient" | "doctor" = isPatient ? "patient" : "doctor";
+    const joinedAt = new Date();
+
+    await appointmentsRepository.markJoined(appointmentId, role, joinedAt);
+
+    pusher.trigger(`appointment-${appointmentId}`, "user_joined", { role, joinedAt }).catch(
+      (err: unknown) => console.error("[pusher] join:", err),
+    );
+
+    return { role, joinedAt };
+  },
 };
 
 // ---------------------------------------------------------------------------

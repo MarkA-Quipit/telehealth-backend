@@ -54,6 +54,10 @@ export const appointments = pgTable("appointments", {
   // Patient note at booking time (symptoms, concerns)
   patientNote: text("patient_note"),
 
+  // Join tracking
+  patientJoinedAt: timestamp("patient_joined_at", { withTimezone: true }),
+  doctorJoinedAt: timestamp("doctor_joined_at", { withTimezone: true }),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

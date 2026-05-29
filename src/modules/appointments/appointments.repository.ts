@@ -21,6 +21,8 @@ export interface AppointmentWithDetails {
   cancelledBy: string | null;
   cancelledAt: Date | null;
   jitsiRoomName: string;
+  patientJoinedAt: Date | null;
+  doctorJoinedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   patient: {
@@ -115,6 +117,8 @@ function buildDetail(row: {
     cancelledBy: a.cancelledBy ?? null,
     cancelledAt: a.cancelledAt ?? null,
     jitsiRoomName: a.jitsiRoomName,
+    patientJoinedAt: a.patientJoinedAt ?? null,
+    doctorJoinedAt: a.doctorJoinedAt ?? null,
     createdAt: a.createdAt,
     updatedAt: a.updatedAt,
     patient: {
@@ -496,5 +500,14 @@ export const appointmentsRepository = {
       .from(chatMessages)
       .where(eq(chatMessages.appointmentId, appointmentId))
       .orderBy(chatMessages.sentAt);
+  },
+
+  // ── markJoined ────────────────────────────────────────────────────────────
+  async markJoined(appointmentId: string, role: "patient" | "doctor", timestamp: Date): Promise<void> {
+    if (role === "patient") {
+      await db.update(appointments).set({ patientJoinedAt: timestamp }).where(eq(appointments.id, appointmentId));
+    } else {
+      await db.update(appointments).set({ doctorJoinedAt: timestamp }).where(eq(appointments.id, appointmentId));
+    }
   },
 };

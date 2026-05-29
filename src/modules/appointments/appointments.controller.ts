@@ -111,6 +111,14 @@ router.patch("/:id/status", authenticate, async (req: Request<{ id: string }>, r
 });
 
 // ---------------------------------------------------------------------------
+// PATCH /api/appointments/:id/join   — record caller has joined the consultation
+// ---------------------------------------------------------------------------
+router.patch("/:id/join", authenticate, async (req: Request<{ id: string }>, res: Response) => {
+  const result = await appointmentsService.joinConsultation(req.params.id, req.user!.id);
+  res.status(200).json({ success: true, message: "Joined consultation", data: result });
+});
+
+// ---------------------------------------------------------------------------
 // PATCH /api/appointments/:id/reschedule   — patient cancels + creates new slot
 // ---------------------------------------------------------------------------
 router.patch("/:id/reschedule", authenticate, async (req: Request<{ id: string }>, res: Response) => {
