@@ -95,6 +95,12 @@ export const cancelAppointmentSchema = z.object({
   cancellationReason: z.string().max(500).optional(),
 });
 
+export const rescheduleAppointmentSchema = z.object({
+  newScheduledAt: z.iso.datetime(),            // ISO UTC, must be future (checked in service)
+  durationMinutes: z.number().int().min(15).max(120).default(30).optional(),
+});
+
 export type CreateAppointmentInput = z.infer<typeof createAppointmentSchema>;
 export type UpdateStatusInput = z.infer<typeof updateStatusSchema>;
 export type CancelAppointmentInput = z.infer<typeof cancelAppointmentSchema>;
+export type RescheduleAppointmentInput = z.infer<typeof rescheduleAppointmentSchema>;

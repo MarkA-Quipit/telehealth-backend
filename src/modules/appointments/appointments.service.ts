@@ -4,7 +4,10 @@ import { appointmentsRepository } from "./appointments.repository";
 import { patientsRepository } from "../patients/patients.repository";
 import { doctorsRepository } from "../doctors/doctors.repository";
 import { notificationsService } from "../notifications/notifications.service";
-import type { CreateAppointmentInput, UpdateStatusInput, CancelAppointmentInput } from "./appointments.schema";
+import { randomUUID } from "crypto";
+import { eq } from "drizzle-orm";
+import { appointments } from "./appointments.schema";
+import type { CreateAppointmentInput, UpdateStatusInput, CancelAppointmentInput, RescheduleAppointmentInput } from "./appointments.schema";
 
 // ---------------------------------------------------------------------------
 // Valid status transitions
@@ -193,6 +196,93 @@ export const appointmentsService = {
           { appointmentId: apptId },
         ).catch((err: unknown) => console.error("[notify] completed:", err));
       }
+    }
+
+    return full;
+  },
+
+  // ── rescheduleAppointment — patient only ─────────────────────────────────
+  async rescheduleAppointment(
+    requesterId: string,
+    appointmentId: string,
+    dto: RescheduleAppointmentInput,
+  ) {
+    const appointment = await appointmentsRepository.findById(appointmentId);
+    if (!appointment) throw new AppError("Appointment not found", 404);
+
+    if (appointment.patient.userId !== requesterId) {
+      throw new AppError("Only the patient can reschedule this appointment", 403);
+    }
+
+    if (TERMINAL.includes(appointment.status)) {
+      throw new AppError(`Appointment is already ${appointment.status} and cannot be rescheduled`, 409);
+    }
+
+    const newScheduledAt = new Date(dto.newScheduledAt);
+    if (newScheduledAt <= new Date()) {
+      throw new AppError("New appointment time must be in the future", 400);
+    }
+
+    const durationMinutes = dto.durationMinutes ?? 30;
+    const hasConflict = await appointmentsRepository.checkConflict(
+      appointment.doctor.id,
+      newScheduledAt,
+      durationMinutes,
+    );
+    if (hasConflict) throw new AppError("This time slot is already booked", 409);
+
+    const newEndsAt = new Date(newScheduledAt.getTime() + durationMinutes * 60 * 1000);
+    const newId = randomUUID();
+
+    // Transaction: cancel old + create new
+    await db.transaction(async (tx) => {
+      await tx
+        .update(appointments)
+        .set({
+          status: "cancelled",
+          cancelledBy: requesterId,
+          cancelledAt: new Date(),
+          cancellationReason: "Rescheduled by patient",
+          updatedAt: new Date(),
+        })
+        .where(eq(appointments.id, appointmentId));
+
+      await tx.insert(appointments).values({
+        id: newId,
+        patientId: appointment.patient.id,
+        doctorId: appointment.doctor.id,
+        scheduledAt: newScheduledAt,
+        endsAt: newEndsAt,
+        status: "pending",
+        jitsiRoomName: `telehealth-${newId}`,
+        patientNote: appointment.reasonForVisit,
+        rescheduledFrom: appointmentId,
+      });
+    });
+
+    const full = await appointmentsRepository.findById(newId);
+
+    if (full) {
+      const patientFullName = `${full.patient.firstName} ${full.patient.lastName}`;
+      const doctorFullName  = `${full.doctor.firstName} ${full.doctor.lastName}`;
+      const formattedDate   = formatDate(newScheduledAt);
+      const apptId          = newId;
+
+      notificationsService.createAndPush(
+        full.patient.userId,
+        "appointment_booked",
+        "Appointment Rescheduled",
+        `Your appointment with Dr. ${doctorFullName} has been rescheduled to ${formattedDate}.`,
+        { appointmentId: apptId },
+      ).catch((err: unknown) => console.error("[notify] reschedule→patient:", err));
+
+      notificationsService.createAndPush(
+        full.doctor.userId,
+        "appointment_booked",
+        "Appointment Rescheduled",
+        `${patientFullName} rescheduled their appointment to ${formattedDate}.`,
+        { appointmentId: apptId },
+      ).catch((err: unknown) => console.error("[notify] reschedule→doctor:", err));
     }
 
     return full;

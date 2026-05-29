@@ -6,6 +6,7 @@ import {
   createAppointmentSchema,
   updateStatusSchema,
   cancelAppointmentSchema,
+  rescheduleAppointmentSchema,
 } from "./appointments.schema";
 
 const router = Router();
@@ -54,6 +55,19 @@ router.patch("/:id/status", authenticate, async (req: Request<{ id: string }>, r
     body,
   );
   res.status(200).json({ success: true, message: "Status updated", data: appointment });
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/appointments/:id/reschedule   — patient cancels + creates new slot
+// ---------------------------------------------------------------------------
+router.patch("/:id/reschedule", authenticate, async (req: Request<{ id: string }>, res: Response) => {
+  const body = rescheduleAppointmentSchema.parse(req.body);
+  const appointment = await appointmentsService.rescheduleAppointment(
+    req.user!.id,
+    req.params.id,
+    body,
+  );
+  res.status(201).json({ success: true, message: "Appointment rescheduled", data: appointment });
 });
 
 // ---------------------------------------------------------------------------
