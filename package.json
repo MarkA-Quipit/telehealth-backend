@@ -35,7 +35,11 @@
     "seed:patients": "tsx src/db/seeds/07-patients.ts",
     "seed:appointments": "tsx src/db/seeds/08-appointments.ts",
     "seed:notes": "tsx src/db/seeds/09-notes.ts",
-    "seed:prescriptions": "tsx src/db/seeds/10-prescriptions.ts"
+    "seed:prescriptions": "tsx src/db/seeds/10-prescriptions.ts",
+    "seed:reviews": "tsx src/db/seeds/12-reviews.ts",
+    "seed:ai-logs": "tsx src/db/seeds/13-ai-logs.ts",
+    "seed:blocked-slots": "tsx src/db/seeds/14-blocked-slots.ts",
+    "seed:chat-messages": "tsx src/db/seeds/15-chat-messages.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
@@ -53,6 +57,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@faker-js/faker": "^9.0.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",

@@ -1,37 +1,35 @@
-import { eq } from 'drizzle-orm';
+import { like, or } from 'drizzle-orm';
 import { db } from '../../config/db';
 import { users } from '../../modules/users/users.schema';
 import { roles, userRoles } from '../../modules/auth/auth.schema';
-import { DEMO_EMAILS } from './04-users';
-
-const ASSIGNMENTS = [
-  { email: DEMO_EMAILS.admin,    roleName: 'admin'   },
-  { email: DEMO_EMAILS.doctor1,  roleName: 'doctor'  },
-  { email: DEMO_EMAILS.doctor2,  roleName: 'doctor'  },
-  { email: DEMO_EMAILS.doctor3,  roleName: 'doctor'  },
-  { email: DEMO_EMAILS.doctor4,  roleName: 'doctor'  },
-  { email: DEMO_EMAILS.doctor5,  roleName: 'doctor'  },
-  { email: DEMO_EMAILS.patient1, roleName: 'patient' },
-  { email: DEMO_EMAILS.patient2, roleName: 'patient' },
-  { email: DEMO_EMAILS.patient3, roleName: 'patient' },
-  { email: DEMO_EMAILS.patient4, roleName: 'patient' },
-  { email: DEMO_EMAILS.patient5, roleName: 'patient' },
-] as const;
 
 export async function seedUserRoles(): Promise<void> {
-  // Resolve all roles into a map
+  // Resolve all roles into a map once
   const allRoles = await db.select({ id: roles.id, name: roles.name }).from(roles);
   const roleMap  = new Map(allRoles.map((r) => [r.name, r.id]));
 
+  // Fetch all demo users in one query — classify by email prefix
+  const allDemoUsers = await db
+    .select({ id: users.id, email: users.email })
+    .from(users)
+    .where(
+      or(
+        like(users.email, 'doctor%@demo.com'),
+        like(users.email, 'patient%@demo.com'),
+        like(users.email, 'admin%@demo.com'),
+      ),
+    );
+
   const rows: { userId: string; roleId: string }[] = [];
 
-  for (const { email, roleName } of ASSIGNMENTS) {
-    const [user] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
-    if (!user) { console.warn(`  ⚠ user '${email}' not found — skipping`); continue; }
+  for (const user of allDemoUsers) {
+    let roleName: 'admin' | 'doctor' | 'patient';
+    if (user.email.startsWith('admin'))   roleName = 'admin';
+    else if (user.email.startsWith('doctor')) roleName = 'doctor';
+    else roleName = 'patient';
 
     const roleId = roleMap.get(roleName);
     if (!roleId) { console.warn(`  ⚠ role '${roleName}' not found — skipping`); continue; }
-
     rows.push({ userId: user.id, roleId });
   }
 

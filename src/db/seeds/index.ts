@@ -9,6 +9,10 @@ import { seedAppointments }     from './08-appointments';
 import { seedNotes }            from './09-notes';
 import { seedPrescriptions }    from './10-prescriptions';
 import { seedNotifications }    from './11-notifications';
+import { seedReviews }          from './12-reviews';
+import { seedAiLogs }           from './13-ai-logs';
+import { seedBlockedSlots }     from './14-blocked-slots';
+import { seedChatMessages }     from './15-chat-messages';
 
 // ---------------------------------------------------------------------------
 // Orchestrator — runs all seeders in dependency order
@@ -28,6 +32,10 @@ async function main(): Promise<void> {
     { name: 'notes',            fn: seedNotes           },
     { name: 'prescriptions',    fn: seedPrescriptions   },
     { name: 'notifications',    fn: seedNotifications   },
+    { name: 'reviews',          fn: seedReviews         },
+    { name: 'ai-logs',          fn: seedAiLogs          },
+    { name: 'blocked-slots',    fn: seedBlockedSlots    },
+    { name: 'chat-messages',    fn: seedChatMessages    },
   ];
 
   for (const step of steps) {
