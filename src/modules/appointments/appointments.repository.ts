@@ -80,6 +80,7 @@ export interface PatientSearchFilters {
   bloodType?: "A+" | "A-" | "B+" | "B-" | "AB+" | "AB-" | "O+" | "O-" | "unknown";
   sex?: "male" | "female" | "other" | "prefer_not_to_say";
   minConsultations?: number;
+  maxConsultations?: number;
   page?: number;
   limit?: number;
 }
@@ -337,6 +338,8 @@ export const appointmentsRepository = {
       conditions.push(or(
         ilike(patientProfiles.firstName, pattern),
         ilike(patientProfiles.lastName, pattern),
+        ilike(sql`${patientProfiles.firstName} || ' ' || ${patientProfiles.lastName}`, pattern),
+        ilike(sql`${patientProfiles.lastName} || ' ' || ${patientProfiles.firstName}`, pattern),
         ilike(users.email, pattern),
         ilike(patientProfiles.allergies, pattern),
         ilike(patientProfiles.currentMedications, pattern),
@@ -398,12 +401,17 @@ export const appointmentsRepository = {
         patientProfiles.profilePictureUrl,
       );
 
-    const havingClause = sql`cast(count(case when ${appointments.status} = 'completed' then 1 end) as int) >= ${filters.minConsultations}`;
+    const needsHaving = filters.minConsultations != null || filters.maxConsultations != null;
+    const completedCountExpr = sql`cast(count(case when ${appointments.status} = 'completed' then 1 end) as int)`;
+    const havingClause = and(
+      filters.minConsultations != null ? sql`${completedCountExpr} >= ${filters.minConsultations}` : undefined,
+      filters.maxConsultations != null ? sql`${completedCountExpr} <= ${filters.maxConsultations}` : undefined,
+    );
 
     const [rows, countResult] = await Promise.all([
-      filters.minConsultations != null
+      needsHaving
         ? afterGroupBy
-            .having(havingClause)
+            .having(havingClause!)
             .orderBy(patientProfiles.firstName, patientProfiles.lastName)
             .limit(limit)
             .offset(offset)
@@ -412,7 +420,7 @@ export const appointmentsRepository = {
             .limit(limit)
             .offset(offset),
 
-      filters.minConsultations != null
+      needsHaving
         ? db
             .select({ id: patientProfiles.id })
             .from(appointments)
@@ -420,7 +428,7 @@ export const appointmentsRepository = {
             .innerJoin(users, eq(patientProfiles.userId, users.id))
             .where(baseWhere)
             .groupBy(patientProfiles.id)
-            .having(havingClause)
+            .having(havingClause!)
             .then((r) => [{ total: r.length }] as const)
         : db
             .select({ total: countDistinct(patientProfiles.id) })

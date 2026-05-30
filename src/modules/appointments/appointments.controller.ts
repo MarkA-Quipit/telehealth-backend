@@ -49,14 +49,14 @@ router.get(
   authenticate,
   requireRole("doctor"),
   async (req: Request, res: Response) => {
-    const { q, bloodType, sex, minConsultations } = searchPatientsSchema.parse(req.query);
+    const { q, bloodType, sex, minConsultations, maxConsultations } = searchPatientsSchema.parse(req.query);
     const page = Number(req.query.page) || 1;
     const limit = Math.min(50, Number(req.query.limit) || 20);
 
     const result = await appointmentsService.searchPatients(
       req.user!.id,
       req.user!.roles,
-      { q, bloodType, sex, minConsultations, page, limit },
+      { q, bloodType, sex, minConsultations, maxConsultations, page, limit },
     );
     res.status(200).json({ success: true, message: "Patients retrieved", data: result });
   },

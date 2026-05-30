@@ -129,6 +129,7 @@ export const searchPatientsSchema = z.object({
   bloodType: z.enum(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "unknown"]).optional(),
   sex: z.enum(["male", "female", "other", "prefer_not_to_say"]).optional(),
   minConsultations: z.coerce.number().int().min(1).optional(),
+  maxConsultations: z.coerce.number().int().min(1).optional(),
 });
 
 export type CreateAppointmentInput = z.infer<typeof createAppointmentSchema>;
