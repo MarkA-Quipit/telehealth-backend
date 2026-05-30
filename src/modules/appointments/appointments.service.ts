@@ -12,6 +12,11 @@ import type { CreateAppointmentInput, UpdateStatusInput, CancelAppointmentInput,
 import type { PatientSearchFilters } from "./appointments.repository";
 
 // ---------------------------------------------------------------------------
+// Booking limit per patient per doctor
+// ---------------------------------------------------------------------------
+const BOOKING_LIMIT = 2;
+
+// ---------------------------------------------------------------------------
 // Valid status transitions
 // ---------------------------------------------------------------------------
 const DOCTOR_TRANSITIONS: Record<string, string[]> = {
@@ -52,6 +57,18 @@ export const appointmentsService = {
     const scheduledAt = new Date(dto.scheduledAt);
     if (scheduledAt <= new Date()) {
       throw new AppError("Appointment must be scheduled in the future", 400);
+    }
+
+    // 3b. Booking limit check
+    const activeCount = await appointmentsRepository.countActiveByPatientAndDoctor(
+      patientProfile.id,
+      dto.doctorId,
+    );
+    if (activeCount >= BOOKING_LIMIT) {
+      throw new AppError(
+        `You already have ${BOOKING_LIMIT} active appointments with this doctor. Cancel or complete one before booking again.`,
+        400,
+      );
     }
 
     const durationMinutes = dto.durationMinutes ?? 30;
@@ -131,7 +148,7 @@ export const appointmentsService = {
   async listAppointments(
     requesterId: string,
     requesterRoles: string[],
-    filters: { status?: string; page?: number; limit?: number },
+    filters: { status?: string; page?: number; limit?: number; dateFrom?: string; dateTo?: string },
   ) {
     if (requesterRoles.includes("doctor")) {
       const doctorProfile = await doctorsRepository.findByUserId(requesterId);
@@ -429,6 +446,21 @@ export const appointmentsService = {
       "END:VEVENT",
       "END:VCALENDAR",
     ].join("\r\n");
+  },
+
+  // ── checkBookingLimit — patient only ─────────────────────────────────────
+  async checkBookingLimit(requesterId: string, doctorId: string) {
+    const patientProfile = await patientsRepository.findByUserId(requesterId);
+    if (!patientProfile) throw new AppError("Only patients can check booking limits", 403);
+
+    const doctorProfile = await doctorsRepository.findById(doctorId);
+    if (!doctorProfile) throw new AppError("Doctor not found", 404);
+
+    const activeCount = await appointmentsRepository.countActiveByPatientAndDoctor(
+      patientProfile.id,
+      doctorId,
+    );
+    return { count: activeCount, limit: BOOKING_LIMIT, canBook: activeCount < BOOKING_LIMIT };
   },
 
   // ── joinConsultation ──────────────────────────────────────────────────────

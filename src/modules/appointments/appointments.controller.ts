@@ -65,6 +65,20 @@ router.get(
 );
 
 // ---------------------------------------------------------------------------
+// GET /api/appointments/limit-check?doctorId=X  — patient booking limit check
+// MUST be before /:id routes so "limit-check" is not treated as an ID
+// ---------------------------------------------------------------------------
+router.get("/limit-check", authenticate, async (req: Request, res: Response) => {
+  const doctorId = typeof req.query.doctorId === "string" ? req.query.doctorId : undefined;
+  if (!doctorId) {
+    res.status(400).json({ success: false, message: "doctorId query param is required" });
+    return;
+  }
+  const result = await appointmentsService.checkBookingLimit(req.user!.id, doctorId);
+  res.status(200).json({ success: true, message: "Limit check", data: result });
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/appointments/:id/calendar  — download .ics file
 // ---------------------------------------------------------------------------
 router.get("/:id/calendar", authenticate, async (req: Request<{ id: string }>, res: Response) => {

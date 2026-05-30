@@ -524,4 +524,19 @@ export const appointmentsRepository = {
       await db.update(appointments).set({ doctorJoinedAt: timestamp }).where(eq(appointments.id, appointmentId));
     }
   },
+
+  // ── countActiveByPatientAndDoctor ─────────────────────────────────────────
+  async countActiveByPatientAndDoctor(patientId: string, doctorId: string): Promise<number> {
+    const result = await db
+      .select({ total: count() })
+      .from(appointments)
+      .where(
+        and(
+          eq(appointments.patientId, patientId),
+          eq(appointments.doctorId, doctorId),
+          ne(appointments.status, "cancelled"),
+        ),
+      );
+    return result[0]?.total ?? 0;
+  },
 };
