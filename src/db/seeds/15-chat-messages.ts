@@ -68,13 +68,18 @@ export async function seedChatMessages(): Promise<void> {
     const appt      = completedAppts[i]!;
     const baseTime  = new Date(appt.scheduledAt);
 
-    // 5 messages per appointment: doctor → patient → doctor → patient → doctor
+    // 10 messages per appointment: doctor → patient alternating
     const TURNS: Array<{ sender: 'doctor' | 'patient'; offsetMin: number }> = [
       { sender: 'doctor',  offsetMin: 1  },
       { sender: 'patient', offsetMin: 3  },
       { sender: 'doctor',  offsetMin: 6  },
       { sender: 'patient', offsetMin: 10 },
       { sender: 'doctor',  offsetMin: 14 },
+      { sender: 'doctor',  offsetMin: 18 },
+      { sender: 'patient', offsetMin: 22 },
+      { sender: 'doctor',  offsetMin: 25 },
+      { sender: 'patient', offsetMin: 28 },
+      { sender: 'doctor',  offsetMin: 30 },
     ];
 
     for (const turn of TURNS) {

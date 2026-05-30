@@ -51,6 +51,15 @@ const PATIENT_NOTES = [
 const STATUSES = ['pending', 'confirmed', 'completed', 'cancelled'] as const;
 const DURATION = 30;
 
+const APPOINTMENTS_PER_DOCTOR = 20;
+
+// Cycles twice over j=0..19 → 6 'completed' per doctor (30%)
+const STATUS_CYCLE = [
+  'pending', 'confirmed', 'completed', 'cancelled',
+  'completed', 'confirmed', 'pending', 'completed',
+  'cancelled', 'confirmed',
+] as const satisfies ReadonlyArray<typeof STATUSES[number]>;
+
 // ---------------------------------------------------------------------------
 // Seed
 // ---------------------------------------------------------------------------
@@ -109,7 +118,7 @@ export async function seedAppointments(): Promise<void> {
     }
   }
 
-  // ── Bulk appointments (2 per patient × 100 patients = 200) ───────────────
+  // ── Bulk appointments (20 per doctor × 100 doctors = 2,000) ─────────────
   // Fetch all patient and doctor profiles ordered by email
   const allPatients = await db
     .select({ id: patientProfiles.id, userId: patientProfiles.userId })
@@ -130,7 +139,6 @@ export async function seedAppointments(): Promise<void> {
     return;
   }
 
-  const bulkRows: Parameters<typeof db.insert>[0] extends unknown ? never[] : never[] = [];
   const bulkRowsTyped: {
     id: string; patientId: string; doctorId: string;
     scheduledAt: Date; endsAt: Date; status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
@@ -138,21 +146,16 @@ export async function seedAppointments(): Promise<void> {
     cancellationReason?: string; cancelledBy?: string; cancelledAt?: Date;
   }[] = [];
 
-  let k = 0; // global appointment index for UUID + status cycling
-  for (let i = 0; i < allPatients.length; i++) {
-    const patient = allPatients[i]!;
-
-    // Two appointments per patient with different doctors
-    const doctorIndexA = i % allDoctors.length;
-    const doctorIndexB = (i + 37) % allDoctors.length;
-
-    for (const doctorIndex of [doctorIndexA, doctorIndexB]) {
-      const doctor = allDoctors[doctorIndex]!;
-      const status = STATUSES[k % 4]!;
-      const apptId = bulkApptId(k + 1);
+  // Doctor-driven loop: 100 doctors × 20 appointments = 2,000 bulk appointments
+  for (let i = 0; i < allDoctors.length; i++) {
+    const doctor = allDoctors[i]!;
+    for (let j = 0; j < APPOINTMENTS_PER_DOCTOR; j++) {
+      const k = i * APPOINTMENTS_PER_DOCTOR + j;
+      const patient  = allPatients[k % allPatients.length]!;
+      const status   = STATUS_CYCLE[j % STATUS_CYCLE.length]!;
+      const apptId   = bulkApptId(k + 1);
       const noteText = PATIENT_NOTES[k % PATIENT_NOTES.length]!;
 
-      // Deterministic schedule based on k
       let scheduledAt: Date;
       if (status === 'pending') {
         scheduledAt = daysOffset((k % 28) + 1);
@@ -182,7 +185,6 @@ export async function seedAppointments(): Promise<void> {
       }
 
       bulkRowsTyped.push(row);
-      k++;
     }
   }
 

@@ -60,10 +60,10 @@ export async function seedAiLogs(): Promise<void> {
     createdAt: Date;
   }[] = [];
 
-  // 2 log entries per patient
+  // 5 log entries per patient
   patientUsers.forEach((patient, i) => {
-    for (let j = 0; j < 2; j++) {
-      const logIndex  = i * 2 + j;
+    for (let j = 0; j < 5; j++) {
+      const logIndex  = i * 5 + j;
       const sympIndex = (logIndex) % SYMPTOMS_POOL.length;
       const specIndex = (logIndex + j * 3) % SPEC_POOL.length;
       const spec      = SPEC_POOL[specIndex]!;
