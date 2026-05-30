@@ -4,10 +4,11 @@ import { users } from '../../modules/users/users.schema';
 import { doctorProfiles, doctorBlockedSlots } from '../../modules/doctors/doctors.schema';
 
 // ---------------------------------------------------------------------------
-// Deterministic UUID: bd{6-digit-n}-0000-0000-0000-000000000000
+// Deterministic UUID: bd{6-digit-n}-0000-4000-8000-000000000000
+// Version nibble = 4, variant nibble = 8 — satisfies Zod v4 z.uuid() validation
 // ---------------------------------------------------------------------------
 function blockedSlotId(n: number): string {
-  return `bd${String(n).padStart(6, '0')}-0000-0000-0000-000000000000`;
+  return `bd${String(n).padStart(6, '0')}-0000-4000-8000-000000000000`;
 }
 
 // ---------------------------------------------------------------------------
