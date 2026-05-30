@@ -29,11 +29,13 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
   const page = Number(req.query.page) || 1;
   const limit = Math.min(50, Number(req.query.limit) || 20);
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const dateFrom = typeof req.query.dateFrom === "string" ? req.query.dateFrom : undefined;
+  const dateTo = typeof req.query.dateTo === "string" ? req.query.dateTo : undefined;
 
   const result = await appointmentsService.listAppointments(
     req.user!.id,
     req.user!.roles,
-    { status, page, limit },
+    { status, page, limit, dateFrom, dateTo },
   );
   res.status(200).json({ success: true, message: "Appointments retrieved", data: result });
 });

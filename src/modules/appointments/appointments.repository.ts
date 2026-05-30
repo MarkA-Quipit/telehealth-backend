@@ -1,4 +1,4 @@
-import { and, eq, lt, gt, ne, count, countDistinct, desc, ilike, or, sql } from "drizzle-orm";
+import { and, eq, lt, gt, gte, lte, ne, count, countDistinct, desc, ilike, or, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { db } from "../../config/db";
 import type { DrizzleTx } from "../../config/db";
@@ -48,6 +48,8 @@ export interface ListFilters {
   status?: string;
   page?: number;
   limit?: number;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export interface PatientSearchResult {
@@ -226,6 +228,8 @@ export const appointmentsRepository = {
     // Get appointment IDs with pagination
     const conditions = [eq(appointments.patientId, patientId)];
     if (filters.status) conditions.push(eq(appointments.status, filters.status as "pending" | "confirmed" | "cancelled" | "completed" | "no_show"));
+    if (filters.dateFrom) conditions.push(gte(appointments.scheduledAt, new Date(filters.dateFrom)));
+    if (filters.dateTo) conditions.push(lte(appointments.scheduledAt, new Date(filters.dateTo)));
 
     const [apptRows, countRows] = await Promise.all([
       db
@@ -262,6 +266,8 @@ export const appointmentsRepository = {
 
     const conditions = [eq(appointments.doctorId, doctorId)];
     if (filters.status) conditions.push(eq(appointments.status, filters.status as "pending" | "confirmed" | "cancelled" | "completed" | "no_show"));
+    if (filters.dateFrom) conditions.push(gte(appointments.scheduledAt, new Date(filters.dateFrom)));
+    if (filters.dateTo) conditions.push(lte(appointments.scheduledAt, new Date(filters.dateTo)));
 
     const [apptRows, countRows] = await Promise.all([
       db
